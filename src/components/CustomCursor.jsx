@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export default function CustomCursor() {
-  const dotRef = useRef(null);
-  const ringRef = useRef(null);
+  const crosshairRef = useRef(null);
   const [isHovering, setIsHovering] = useState(false);
   const [visible, setVisible] = useState(false);
 
@@ -12,30 +11,14 @@ export default function CustomCursor() {
     ).matches;
     if (isTouch) return;
 
-    const dot = dotRef.current;
-    const ring = ringRef.current;
-    if (!dot || !ring) return;
-
-    let mouseX = 0;
-    let mouseY = 0;
-    let ringX = 0;
-    let ringY = 0;
-    let rafId;
+    const crosshair = crosshairRef.current;
+    if (!crosshair) return;
 
     const onMove = (e) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
       setVisible(true);
-      dot.style.left = `${mouseX}px`;
-      dot.style.top = `${mouseY}px`;
-    };
-
-    const animate = () => {
-      ringX += (mouseX - ringX) * 0.18;
-      ringY += (mouseY - ringY) * 0.18;
-      ring.style.left = `${ringX}px`;
-      ring.style.top = `${ringY}px`;
-      rafId = requestAnimationFrame(animate);
+      // No lerp/lag — a reticle should track 1:1 with the pointer.
+      crosshair.style.left = `${e.clientX}px`;
+      crosshair.style.top = `${e.clientY}px`;
     };
 
     const onEnter = () => setIsHovering(true);
@@ -54,32 +37,28 @@ export default function CustomCursor() {
 
     bind();
     window.addEventListener("mousemove", onMove);
-    rafId = requestAnimationFrame(animate);
 
     const observer = new MutationObserver(bind);
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(rafId);
       observer.disconnect();
     };
   }, []);
 
   return (
-    <>
-      <div
-        ref={dotRef}
-        className={`custom-cursor-dot ${isHovering ? "hover" : ""} ${
-          visible ? "opacity-100" : "opacity-0"
-        }`}
-      />
-      <div
-        ref={ringRef}
-        className={`custom-cursor-ring ${isHovering ? "hover" : ""} ${
-          visible ? "opacity-100" : "opacity-0"
-        }`}
-      />
-    </>
+    <div
+      ref={crosshairRef}
+      className={`custom-cursor-crosshair ${isHovering ? "hover" : ""} ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <span className="crosshair-arm top" />
+      <span className="crosshair-arm bottom" />
+      <span className="crosshair-arm left" />
+      <span className="crosshair-arm right" />
+      <span className="crosshair-dot" />
+    </div>
   );
 }

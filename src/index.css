@@ -44,55 +44,93 @@ button,
   border-radius: 99px;
 }
 
-.custom-cursor-dot {
+.custom-cursor-crosshair {
   position: fixed;
   top: 0;
   left: 0;
-  width: 7px;
-  height: 7px;
-  background: #4ade80;
-  border-radius: 50%;
+  width: 0;
+  height: 0;
   pointer-events: none;
   z-index: 9999;
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 10px #4ade80, 0 0 22px #22c55e66;
-  transition: width 0.15s ease, height 0.15s ease, background 0.15s ease;
 }
 
-.custom-cursor-ring {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 34px;
-  height: 34px;
-  border: 1.5px solid rgba(74, 222, 128, 0.55);
+.crosshair-arm {
+  position: absolute;
+  background: var(--term-green);
+  box-shadow: 0 0 5px var(--term-green), 0 0 10px rgba(74, 222, 128, 0.4);
+  transition: width 0.15s ease, height 0.15s ease, top 0.15s ease,
+    left 0.15s ease, background 0.15s ease;
+}
+
+.crosshair-arm.top,
+.crosshair-arm.bottom {
+  width: 1.5px;
+  height: 8px;
+  left: -0.75px;
+}
+.crosshair-arm.top {
+  top: -14px;
+}
+.crosshair-arm.bottom {
+  top: 6px;
+}
+
+.crosshair-arm.left,
+.crosshair-arm.right {
+  height: 1.5px;
+  width: 8px;
+  top: -0.75px;
+}
+.crosshair-arm.left {
+  left: -14px;
+}
+.crosshair-arm.right {
+  left: 6px;
+}
+
+.crosshair-dot {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 2px;
+  height: 2px;
   border-radius: 50%;
-  pointer-events: none;
-  z-index: 9998;
-  transform: translate(-50%, -50%);
-  transition: width 0.2s ease, height 0.2s ease, border-color 0.2s ease,
-    background 0.2s ease;
+  background: var(--term-green);
+  box-shadow: 0 0 4px var(--term-green);
+  transition: background 0.15s ease;
 }
 
-.custom-cursor-dot.hover {
-  width: 11px;
-  height: 11px;
+.custom-cursor-crosshair.hover .crosshair-arm.top,
+.custom-cursor-crosshair.hover .crosshair-arm.bottom {
+  height: 12px;
+}
+.custom-cursor-crosshair.hover .crosshair-arm.top {
+  top: -20px;
+}
+.custom-cursor-crosshair.hover .crosshair-arm.bottom {
+  top: 8px;
+}
+.custom-cursor-crosshair.hover .crosshair-arm.left,
+.custom-cursor-crosshair.hover .crosshair-arm.right {
+  width: 12px;
+}
+.custom-cursor-crosshair.hover .crosshair-arm.left {
+  left: -20px;
+}
+.custom-cursor-crosshair.hover .crosshair-arm.right {
+  left: 8px;
+}
+.custom-cursor-crosshair.hover .crosshair-arm,
+.custom-cursor-crosshair.hover .crosshair-dot {
   background: #86efac;
-}
-
-.custom-cursor-ring.hover {
-  width: 50px;
-  height: 50px;
-  border-color: #86efac;
-  background: rgba(74, 222, 128, 0.07);
 }
 
 @media (hover: none) and (pointer: coarse) {
   body {
     cursor: auto;
   }
-  .custom-cursor-dot,
-  .custom-cursor-ring {
+  .custom-cursor-crosshair {
     display: none !important;
   }
 }
@@ -102,8 +140,8 @@ button,
     0deg,
     transparent,
     transparent 2px,
-    rgba(0, 0, 0, 0.13) 2px,
-    rgba(0, 0, 0, 0.13) 4px
+    rgba(0, 0, 0, 0.09) 2px,
+    rgba(0, 0, 0, 0.09) 4px
   );
   pointer-events: none;
 }
@@ -111,8 +149,8 @@ button,
 .vignette {
   background: radial-gradient(
     ellipse at center,
-    transparent 35%,
-    rgba(0, 0, 0, 0.65) 100%
+    transparent 45%,
+    rgba(0, 0, 0, 0.5) 100%
   );
   pointer-events: none;
 }
