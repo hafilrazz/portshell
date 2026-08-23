@@ -41,7 +41,7 @@ export default function CustomCursor() {
     const onEnter = () => setIsHovering(true);
     const onLeave = () => setIsHovering(false);
 
-    const bindInteractive = () => {
+    const bind = () => {
       document
         .querySelectorAll(
           'a, button, [role="button"], input, textarea, select, label'
@@ -52,11 +52,11 @@ export default function CustomCursor() {
         });
     };
 
-    bindInteractive();
+    bind();
     window.addEventListener("mousemove", onMove);
     rafId = requestAnimationFrame(animate);
 
-    const observer = new MutationObserver(bindInteractive);
+    const observer = new MutationObserver(bind);
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {

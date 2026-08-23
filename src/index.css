@@ -1,4 +1,11 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  --term-green: #4ade80;
+  --term-green-dim: #16a34a;
+  --term-bg: #070a08;
+}
 
 html {
   scroll-behavior: smooth;
@@ -6,8 +13,10 @@ html {
 
 body {
   margin: 0;
-  background: #050505;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: #030303;
+  color: var(--term-green);
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, monospace;
   cursor: none;
   overflow-x: hidden;
 }
@@ -24,31 +33,29 @@ button,
   cursor: none;
 }
 
-/* Scrollbar */
 .term-scroll::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 .term-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 .term-scroll::-webkit-scrollbar-thumb {
-  background: #14532d;
-  border-radius: 999px;
+  background: #14532d88;
+  border-radius: 99px;
 }
 
-/* Custom cursor */
 .custom-cursor-dot {
   position: fixed;
   top: 0;
   left: 0;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   background: #4ade80;
   border-radius: 50%;
   pointer-events: none;
   z-index: 9999;
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 12px #4ade80, 0 0 24px #22c55e55;
+  box-shadow: 0 0 10px #4ade80, 0 0 22px #22c55e66;
   transition: width 0.15s ease, height 0.15s ease, background 0.15s ease;
 }
 
@@ -56,9 +63,9 @@ button,
   position: fixed;
   top: 0;
   left: 0;
-  width: 36px;
-  height: 36px;
-  border: 1.5px solid rgba(74, 222, 128, 0.65);
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid rgba(74, 222, 128, 0.55);
   border-radius: 50%;
   pointer-events: none;
   z-index: 9998;
@@ -68,16 +75,16 @@ button,
 }
 
 .custom-cursor-dot.hover {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   background: #86efac;
 }
 
 .custom-cursor-ring.hover {
-  width: 52px;
-  height: 52px;
+  width: 50px;
+  height: 50px;
   border-color: #86efac;
-  background: rgba(74, 222, 128, 0.08);
+  background: rgba(74, 222, 128, 0.07);
 }
 
 @media (hover: none) and (pointer: coarse) {
@@ -90,22 +97,40 @@ button,
   }
 }
 
-/* CRT scanlines */
 .scanlines {
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%,
-    rgba(0, 0, 0, 0.12) 50%
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.13) 2px,
+    rgba(0, 0, 0, 0.13) 4px
   );
-  background-size: 100% 3px;
   pointer-events: none;
 }
 
-/* Soft vignette */
 .vignette {
   background: radial-gradient(
     ellipse at center,
-    transparent 40%,
-    rgba(0, 0, 0, 0.55) 100%
+    transparent 35%,
+    rgba(0, 0, 0, 0.65) 100%
   );
   pointer-events: none;
+}
+
+.shell-glow {
+  box-shadow:
+    0 0 0 1px rgba(74, 222, 128, 0.12),
+    0 0 60px -10px rgba(34, 197, 94, 0.35),
+    0 25px 50px -20px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(74, 222, 128, 0.08);
+}
+
+.caret {
+  animation: blink 1.1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }

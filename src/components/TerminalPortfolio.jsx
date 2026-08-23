@@ -11,12 +11,7 @@ import {
   ChevronRight,
   Sparkles,
 } from "lucide-react";
-import {
-  profile,
-  skills,
-  projects,
-  animeWallpapers,
-} from "../data/portfolio";
+import { profile, skills, projects, wallpapers } from "../data/portfolio";
 
 const COMMANDS = {
   help: "Show available commands",
@@ -33,12 +28,21 @@ const COMMANDS = {
 const BOOT_LINES = [
   "Initializing hafil@portfolio...",
   "Loading kernel modules .............. OK",
-  "Mounting anime wallpaper engine ...... OK",
-  "Starting shell session ............... OK",
+  "Mounting wallpaper engine ........... OK",
+  "Starting shell session .............. OK",
   "",
   "Welcome to hafilrazz.dev",
   'Type "help" to see available commands.',
 ];
+
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = src;
+  });
+}
 
 export default function TerminalPortfolio() {
   const [wallpaper, setWallpaper] = useState(null);
@@ -49,7 +53,7 @@ export default function TerminalPortfolio() {
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
-  const loadAnimeBg = useCallback(async () => {
+  const loadWallpaper = useCallback(async () => {
     setBgLoaded(false);
     try {
       const endpoints = [
@@ -70,20 +74,19 @@ export default function TerminalPortfolio() {
         return;
       }
     } catch {
-      /* fallback below */
+      /* fallback */
     }
     const fallback =
-      animeWallpapers[Math.floor(Math.random() * animeWallpapers.length)];
+      wallpapers[Math.floor(Math.random() * wallpapers.length)];
     await preloadImage(fallback);
     setWallpaper(fallback);
     setBgLoaded(true);
   }, []);
 
   useEffect(() => {
-    loadAnimeBg();
-  }, [loadAnimeBg]);
+    loadWallpaper();
+  }, [loadWallpaper]);
 
-  // Boot sequence
   useEffect(() => {
     let i = 0;
     const id = setInterval(() => {
@@ -92,9 +95,10 @@ export default function TerminalPortfolio() {
         setHistory((prev) => [
           ...prev,
           {
-            type: line.startsWith("Welcome") || line.startsWith("Type")
-              ? "system"
-              : "boot",
+            type:
+              line.startsWith("Welcome") || line.startsWith("Type")
+                ? "system"
+                : "boot",
             content: line || " ",
           },
         ]);
@@ -103,7 +107,7 @@ export default function TerminalPortfolio() {
         clearInterval(id);
         setBooting(false);
       }
-    }, 180);
+    }, 160);
     return () => clearInterval(id);
   }, []);
 
@@ -183,10 +187,7 @@ export default function TerminalPortfolio() {
           addLines([{ type: "project", content: p, index: i + 1 }]);
         });
         addLines([
-          {
-            type: "dim",
-            content: 'Tip: click a repo · or type "github"',
-          },
+          { type: "dim", content: 'Tip: click a repo · or type "github"' },
         ]);
         return;
 
@@ -201,19 +202,12 @@ export default function TerminalPortfolio() {
         return;
 
       case "neofetch":
-        addLines([
-          {
-            type: "neofetch",
-            content: null,
-          },
-        ]);
+        addLines([{ type: "neofetch", content: null }]);
         return;
 
       case "wallpaper":
-        addLines([
-          { type: "output", content: "Fetching new wallpaper..." },
-        ]);
-        loadAnimeBg().then(() => {
+        addLines([{ type: "output", content: "Fetching new wallpaper..." }]);
+        loadWallpaper().then(() => {
           addLines([{ type: "system", content: "Wallpaper updated ✓" }]);
         });
         return;
@@ -241,7 +235,7 @@ export default function TerminalPortfolio() {
 
   return (
     <div className="relative min-h-screen overflow-hidden font-mono text-green-400">
-      {/* background */}
+      {/* Background */}
       <div
         className={`fixed inset-0 scale-110 bg-cover bg-center bg-no-repeat transition-all duration-1000 ${
           bgLoaded ? "opacity-100 blur-0" : "opacity-0 blur-sm"
@@ -252,12 +246,10 @@ export default function TerminalPortfolio() {
         }}
       />
 
-      {/* Overlays */}
-      <div className="fixed inset-0 bg-gradient-to-b from-black/75 via-black/60 to-black/80" />
+      <div className="fixed inset-0 bg-gradient-to-b from-black/80 via-black/65 to-black/85" />
       <div className="vignette fixed inset-0" />
-      <div className="scanlines fixed inset-0 z-10 opacity-40" />
+      <div className="scanlines fixed inset-0 z-10 opacity-35" />
 
-      {/* Loading badge */}
       {!bgLoaded && (
         <div className="fixed right-4 top-4 z-30 rounded-full border border-green-500/30 bg-black/60 px-3 py-1 text-[11px] text-green-500 backdrop-blur">
           loading wallpaper...
@@ -268,11 +260,11 @@ export default function TerminalPortfolio() {
         <motion.div
           initial={{ opacity: 0, y: 28, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="overflow-hidden rounded-2xl border border-green-500/20 bg-[#0a0a0a]/88 shadow-[0_0_80px_-12px_rgba(34,197,94,0.35)] backdrop-blur-xl"
+          transition={{ duration: 0.45, ease: "easeOut" }}
+          className="shell-glow overflow-hidden rounded-2xl border border-green-500/15 bg-[#080c0a]/90 backdrop-blur-xl"
         >
           {/* Title bar */}
-          <div className="flex items-center gap-2 border-b border-green-500/15 bg-gradient-to-r from-[#0f0f0f]/95 to-[#121212]/95 px-4 py-2.5">
+          <div className="flex items-center gap-2 border-b border-green-500/12 bg-gradient-to-r from-[#0c100e]/95 to-[#0e1411]/95 px-4 py-2.5">
             <div className="flex gap-1.5">
               <span className="h-3 w-3 rounded-full bg-red-500/90 shadow-[0_0_8px_#ef4444]" />
               <span className="h-3 w-3 rounded-full bg-yellow-500/90 shadow-[0_0_8px_#eab308]" />
@@ -283,25 +275,24 @@ export default function TerminalPortfolio() {
               <span className="tracking-wide">hafil@portfolio:~</span>
             </div>
             <div className="ml-auto flex items-center gap-2 text-[10px] text-green-600/70">
-              <Sparkles size={11} className="text-green-500/60" />
+              <Sparkles size={11} className="text-green-500/50" />
               {profile.available ? "● online" : "○ away"}
             </div>
           </div>
 
-          {/* Terminal body */}
+          {/* Body */}
           <div
             className="term-scroll h-[62vh] overflow-y-auto p-4 sm:h-[68vh] sm:p-5"
             onClick={() => !booting && inputRef.current?.focus()}
           >
-            {/* Identity header */}
             <div className="mb-5 flex flex-col gap-3 border-b border-green-500/10 pb-4 sm:flex-row sm:items-center">
               <div className="relative">
                 <img
                   src={profile.avatar}
                   alt={profile.name}
-                  className="h-14 w-14 rounded-xl border border-green-500/40 object-cover shadow-[0_0_20px_rgba(34,197,94,0.25)] sm:h-16 sm:w-16"
+                  className="h-14 w-14 rounded-xl border border-green-500/35 object-cover shadow-[0_0_20px_rgba(34,197,94,0.22)] sm:h-16 sm:w-16"
                 />
-                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0a0a0a] bg-green-400" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#080c0a] bg-green-400" />
               </div>
               <div>
                 <h1 className="text-lg font-bold tracking-tight text-green-300 sm:text-xl">
@@ -326,7 +317,6 @@ export default function TerminalPortfolio() {
               </div>
             </div>
 
-            {/* History */}
             <div className="space-y-1.5 text-[13px] leading-relaxed sm:text-sm">
               <AnimatePresence initial={false}>
                 {history.map((item, i) => (
@@ -337,17 +327,22 @@ export default function TerminalPortfolio() {
                     transition={{ duration: 0.12 }}
                   >
                     {item.type === "boot" && (
-                      <p className="text-green-700/90">{item.content}</p>
+                      <p className="text-green-800/90">{item.content}</p>
                     )}
                     {item.type === "system" && (
                       <p className="text-green-500/75">{item.content}</p>
                     )}
                     {item.type === "dim" && (
-                      <p className="text-green-700/80">{item.content}</p>
+                      <p className="text-green-800/80">{item.content}</p>
                     )}
                     {item.type === "input" && (
                       <div className="flex items-center gap-2 text-green-300">
-                        <ChevronRight size={14} className="shrink-0 text-green-500" />
+                        <span className="shrink-0 text-green-600">
+                          hafil@portfolio
+                        </span>
+                        <span className="text-green-700">:</span>
+                        <span className="text-blue-400/80">~</span>
+                        <span className="text-green-600">$</span>
                         <span>{item.content}</span>
                       </div>
                     )}
@@ -369,30 +364,34 @@ export default function TerminalPortfolio() {
               <div ref={bottomRef} />
             </div>
 
-            {/* Prompt */}
             {!booting && (
               <form
                 onSubmit={handleSubmit}
-                className="mt-3 flex items-center gap-2"
+                className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1"
               >
-                <span className="shrink-0 text-green-500">❯</span>
+                <span className="shrink-0 text-[13px] text-green-600 sm:text-sm">
+                  hafil@portfolio
+                </span>
+                <span className="text-green-700">:</span>
+                <span className="text-blue-400/80">~</span>
+                <span className="text-green-600">$</span>
                 <input
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  className="w-full bg-transparent text-green-300 caret-green-400 outline-none placeholder:text-green-900"
+                  className="min-w-[12rem] flex-1 bg-transparent text-green-300 caret-green-400 outline-none placeholder:text-green-900"
                   placeholder="type a command..."
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <span className="animate-pulse text-green-500">▌</span>
+                <span className="caret text-green-500">▌</span>
               </form>
             )}
           </div>
 
-          {/* Footer shortcuts */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-green-500/10 bg-[#0c0c0c]/95 px-3 py-2 text-[10px] text-green-700 sm:px-4 sm:text-[11px]">
-            <div className="flex flex-wrap gap-2 sm:gap-3">
+          {/* Status bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-green-500/10 bg-[#0a0f0c]/95 px-3 py-2 text-[10px] text-green-700 sm:px-4 sm:text-[11px]">
+            <div className="flex flex-wrap gap-1 sm:gap-2">
               {["help", "projects", "skills", "neofetch", "wallpaper"].map(
                 (c) => (
                   <button
@@ -407,11 +406,10 @@ export default function TerminalPortfolio() {
                 )
               )}
             </div>
-            <span className="text-green-800">hafilrazz · v1.1</span>
+            <span className="text-green-900">portshell · v1.2</span>
           </div>
         </motion.div>
 
-        {/* Social row */}
         <div className="mt-5 flex flex-wrap justify-center gap-5 text-sm text-green-500/70">
           <a
             href={profile.github}
@@ -443,21 +441,12 @@ export default function TerminalPortfolio() {
   );
 }
 
-function preloadImage(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve();
-    img.onerror = () => resolve();
-    img.src = src;
-  });
-}
-
 function ProjectLine({ project, index }) {
   return (
-    <div className="group my-2.5 rounded-xl border border-green-500/15 bg-green-950/25 p-3 transition hover:border-green-400/35 hover:bg-green-950/40 hover:shadow-[0_0_24px_-8px_rgba(34,197,94,0.4)]">
+    <div className="group my-2.5 rounded-xl border border-green-500/12 bg-green-950/20 p-3 transition hover:border-green-400/30 hover:bg-green-950/35 hover:shadow-[0_0_24px_-8px_rgba(34,197,94,0.35)]">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-green-700">[{index}]</span>
+          <span className="text-green-800">[{index}]</span>
           <a
             href={project.url}
             target="_blank"
@@ -466,7 +455,7 @@ function ProjectLine({ project, index }) {
           >
             {project.name}
           </a>
-          <span className="rounded-md bg-green-900/50 px-1.5 py-0.5 text-[10px] text-green-400">
+          <span className="rounded-md bg-green-900/45 px-1.5 py-0.5 text-[10px] text-green-400">
             {project.language}
           </span>
         </div>
@@ -497,7 +486,7 @@ function ProjectLine({ project, index }) {
           {project.topics.map((t) => (
             <span
               key={t}
-              className="rounded border border-green-800/40 px-1.5 py-0.5 text-[10px] text-green-600"
+              className="rounded border border-green-800/35 px-1.5 py-0.5 text-[10px] text-green-600"
             >
               #{t}
             </span>
@@ -510,7 +499,7 @@ function ProjectLine({ project, index }) {
 
 function NeofetchCard() {
   return (
-    <div className="my-2 flex flex-col gap-3 rounded-xl border border-green-500/15 bg-black/40 p-3 sm:flex-row sm:gap-5">
+    <div className="my-2 flex flex-col gap-3 rounded-xl border border-green-500/12 bg-black/40 p-3 sm:flex-row sm:gap-5">
       <img
         src={profile.avatar}
         alt=""
@@ -519,9 +508,9 @@ function NeofetchCard() {
       <div className="space-y-0.5 text-[12px] sm:text-[13px]">
         <p className="font-bold text-green-300">
           {profile.username}
-          <span className="text-green-600">@portfolio</span>
+          <span className="text-green-700">@portfolio</span>
         </p>
-        <p className="text-green-700">----------------------</p>
+        <p className="text-green-800">----------------------</p>
         <p>
           <span className="text-green-500">Name</span> · {profile.name}
         </p>
@@ -535,7 +524,7 @@ function NeofetchCard() {
           <span className="text-green-500">Shell</span> · zsh / react-terminal
         </p>
         <p>
-          <span className="text-green-500">Theme</span> · anime-crt-green
+          <span className="text-green-500">Theme</span> · crt-green
         </p>
         <p>
           <span className="text-green-500">Status</span> ·{" "}

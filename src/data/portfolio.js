@@ -67,10 +67,10 @@ export const projects = [
   },
 ];
 
-export const animeWallpapers = [
-  "https://images.wallpaperscraft.com/image/single/girl_anime_art_140957_1920x1080.jpg",
-  "https://images.wallpaperscraft.com/image/single/girl_umbrella_anime_161092_1920x1080.jpg",
-  "https://images.wallpaperscraft.com/image/single/girl_reins_anime_134132_1920x1080.jpg",
-  "https://images.wallpaperscraft.com/image/single/girl_face_anime_art_106665_1920x1080.jpg",
-  "https://images.wallpaperscraft.com/image/single/girl_headphones_anime_140749_1920x1080.jpg",
+export const wallpapers = [
+  "https://images.wallpaperscraft.com/image/single/girl_art_140957_1920x1080.jpg",
+  "https://images.wallpaperscraft.com/image/single/girl_umbrella_161092_1920x1080.jpg",
+  "https://images.wallpaperscraft.com/image/single/girl_reins_134132_1920x1080.jpg",
+  "https://images.wallpaperscraft.com/image/single/girl_face_art_106665_1920x1080.jpg",
+  "https://images.wallpaperscraft.com/image/single/girl_headphones_140749_1920x1080.jpg",
 ];
