@@ -44,7 +44,7 @@ Interactive **terminal-style portfolio** for [Hafil Razak](https://github.com/ha
 | `projects`  | Featured GitHub projects        |
 | `contact`   | Social / contact links          |
 | `neofetch`  | Profile system card             |
-| `wallpaper` | Load a new anime background     |
+| `wallpaper` | Load a new background     |
 | `github`    | Open GitHub profile             |
 | `clear`     | Clear the terminal              |
 
