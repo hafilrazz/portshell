@@ -1,6 +1,6 @@
 # hafilrazz
 
-Interactive **terminal-style portfolio** for [Hafil Razak](https://github.com/hafilrazz) — backgrounds, custom cursor, and a command-driven shell UI.
+Interactive **terminal-style portfolio** backgrounds, custom cursor, and a command-driven shell UI.
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
