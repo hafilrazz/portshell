@@ -22,6 +22,7 @@ const COMMANDS = {
   wallpaper: "load a new background",
   clear: "clear terminal",
   github: "open github profile",
+  resume: "download my resume",
 };
 
 const BOOT_LINES = [
@@ -194,6 +195,17 @@ export default function TerminalPortfolio() {
         window.open(profile.github, "_blank", "noreferrer");
         addLines([{ t: "output", c: "opening github..." }]);
         return;
+
+      case "resume": {
+        const link = document.createElement("a");
+        link.href = "/resume.pdf";
+        link.download = "Muhammad Hafil Razak - Resume.pdf";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        addLines([{ t: "system", c: "resume download started ✓" }]);
+        return;
+      }
 
       default:
         addLines([{ t: "error", c: `command not found: ${cmd} — try "help"` }]);
