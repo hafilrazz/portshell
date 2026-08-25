@@ -157,7 +157,7 @@ export default function TerminalPortfolio() {
       })),
     ]);
 
-  const runCommand = (raw) => {
+  const runCommand = async (raw) => {
     const cmd = raw.trim().toLowerCase();
 
     if (!cmd || booting) return;
@@ -290,7 +290,6 @@ export default function TerminalPortfolio() {
           },
           { t: "rule" },
         ]);
-
         return;
 
       case "neofetch":
@@ -333,19 +332,54 @@ export default function TerminalPortfolio() {
         return;
 
       case "resume": {
-        const link = document.createElement("a");
-        link.href = resumePdf;
-        link.download = "Muhammad Hafil Razak - Resume.pdf";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        try {
+          addLines([
+            {
+              t: "output",
+              c: "preparing resume...",
+            },
+          ]);
 
-        addLines([
-        { t: "system", c: "resume download started ✓" }
-      ]);
+          const response = await fetch(resumePdf);
 
-     return;
-     }
+          if (!response.ok) {
+            throw new Error("Failed to load resume");
+          }
+
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+
+          const link = document.createElement("a");
+          link.href = blobUrl;
+          link.download = "Resume.pdf";
+
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+
+          // Give the browser time to start the download before
+          // releasing the temporary object URL.
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+          addLines([
+            {
+              t: "system",
+              c: "resume download started ✓",
+            },
+          ]);
+        } catch (error) {
+          console.error("Resume download error:", error);
+
+          addLines([
+            {
+              t: "error",
+              c: "failed to download resume",
+            },
+          ]);
+        }
+
+        return;
+      }
 
       default:
         addLines([
@@ -354,6 +388,7 @@ export default function TerminalPortfolio() {
             c: `command not found: ${cmd} — try "help"`,
           },
         ]);
+        return;
     }
   };
 
