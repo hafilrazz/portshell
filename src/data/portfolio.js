@@ -1,10 +1,10 @@
 export const profile = {
   name: "Hafil Razak",
   username: "hafilrazz",
-  role: "Software Engineer • Full Stack & AI/ML",
+  role: "Software Engineer • Full Stack Developer",
   title: "Full Stack Developer & AI Enthusiast",
-  location: "Kerala, India",
-  email: "hafilrazak@gmail.com",
+  location: "Mangalore, India",
+  email: "hafilrazz@gmail.com",
   bio: "Computer Science engineer passionate about building high-performance web applications, decentralized offline systems, and AI-driven diagnostic tools with intuitive user experiences.",
   avatar: "https://avatars.githubusercontent.com/u/120009823?v=4",
   github: "https://github.com/hafilrazz",
@@ -12,20 +12,6 @@ export const profile = {
   linkedin: "https://www.linkedin.com/in/hafilrazz",
   available: true,
   statusText: "Open for opportunities & collaborations",
-  experience: [
-    {
-      role: "Software Engineer / Student Developer",
-      organization: "Independent & Open Source",
-      period: "2023 — Present",
-      description: "Developing offline-first mesh networks, neural vision models, and full-stack web platforms.",
-    },
-    {
-      role: "B.Tech in Computer Science & Engineering",
-      organization: "APJ Abdul Kalam Technological University",
-      period: "2021 — 2025",
-      description: "Focus on Distributed Systems, Deep Learning, Algorithms, and Modern Web Architectures.",
-    },
-  ],
 };
 
 export const skills = {
