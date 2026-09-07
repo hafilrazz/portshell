@@ -11,13 +11,37 @@ Interactive **terminal-style portfolio** for [Hafil Razak](https://github.com/ha
 
 ## Features
 
-- Terminal UI with boot sequence and live command input
-- Random **style** wallpaper on every refresh (`wallpaper` command to change it)
-- Custom green glow cursor (auto-disabled on touch devices)
-- Commands: `help`, `about`, `skills`, `projects`, `contact`, `neofetch`, `github`, `clear`
-- Project cards with stars, forks, topics, and live demos
-- Glassmorphism panel, CRT scanlines, vignette overlays
-- Fully responsive
+- **Interactive Terminal Shell**: Boot sequence, command history (<kbd>↑</kbd>/<kbd>↓</kbd>), <kbd>Tab</kbd> autocomplete, and inline ghost suggestions.
+- **Multi-Theme Engine**: 6 retro/cyberpunk palettes (Phosphor CRT, Cyberpunk 2077, Dracula/Nord, Pip-Boy Amber, Monokai Pro, Tokyo Night) with cursor and glow adaptation.
+- **Dual CLI & GUI Navigation**: Switch between terminal mode and visual tabs (`terminal.sh`, `projects.json`, `about.md`, `skills.yaml`, `contact.env`).
+- **Matrix Screensaver**: Full-screen falling digital rain animation (`matrix` command or button).
+- **Retro Audio FX**: Built-in Web Audio API synthesized mechanical keystrokes, enter chimes, and error beeps (with mute toggle).
+- **Interactive Window Frame**: Clear buffer (red dot), compact mode (yellow dot), and fullscreen toggle (green dot), plus live clock and uptime counter.
+- **Rich Project Showcase**: Star & fork counters, language tags, live demos, and one-click `git clone` copy.
+- **Visual Skills Meter**: Categorized tech stack with animated progress bars.
+- **Dynamic Wallpapers & CRT Overlays**: Waifu/aesthetic photo engine, scanline toggle, and vignette overlays.
+
+---
+
+## Commands
+
+| Command      | Description                                       |
+|--------------|---------------------------------------------------|
+| `help`       | List all available commands                       |
+| `about`      | Bio, timeline, education, and resume summary      |
+| `skills`     | Tech stack proficiency breakdown                  |
+| `projects`   | Featured GitHub repositories and demos            |
+| `contact`    | Transmission endpoints and social links           |
+| `neofetch`   | Profile system and hardware card                  |
+| `theme`      | Switch color theme (`theme matrix/cyberpunk/...`) |
+| `matrix`     | Launch falling digital rain screensaver           |
+| `wallpaper`  | Load a fresh background                           |
+| `time`       | Display current time and session uptime           |
+| `history`    | View previously entered shell commands            |
+| `resume`     | Download curriculum vitae (PDF)                   |
+| `github`     | Open GitHub profile in browser                    |
+| `clear`      | Clear terminal output buffer (Ctrl+L)             |
+
 
 ---
 
@@ -30,23 +54,8 @@ Interactive **terminal-style portfolio** for [Hafil Razak](https://github.com/ha
 | Animation   | Framer Motion                               |
 | Icons       | Lucide React                                |
 | Utils       | clsx, tailwind-merge                        |
+| Audio       | Web Audio API (zero external assets)        |
 | Deploy      | Vercel                                      |
-
----
-
-## Commands
-
-| Command      | Description                    |
-|-------------|---------------------------------|
-| `help`      | List all commands               |
-| `about`     | About me                        |
-| `skills`    | Tech stack                      |
-| `projects`  | Featured GitHub projects        |
-| `contact`   | Social / contact links          |
-| `neofetch`  | Profile system card             |
-| `wallpaper` | Load a new background     |
-| `github`    | Open GitHub profile             |
-| `clear`     | Clear the terminal              |
 
 ---
 

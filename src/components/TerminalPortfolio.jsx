@@ -1,40 +1,64 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import PropTypes from "prop-types";
 import {
   Terminal as TerminalIcon,
   Github,
+  Linkedin,
   ExternalLink,
   Star,
   GitFork,
-  MapPin,
-  User,
   Sparkles,
+  Volume2,
+  VolumeX,
+  Maximize2,
+  Minimize2,
+  FolderGit2,
+  Cpu,
+  Mail,
+  Palette,
+  RotateCcw,
+  Clock,
+  Copy,
+  Check,
 } from "lucide-react";
 
-import { profile, skills, projects, wallpapers } from "../data/portfolio";
+import { profile, skills, projects } from "../data/portfolio";
+import { WALLPAPERS } from "../data/wallpapers";
+import { THEMES, DEFAULT_THEME_ID } from "../data/themes";
+import { soundFx } from "../utils/sound";
+import MatrixRain from "./MatrixRain";
+import GuiProjectsView from "./tabs/GuiProjectsView";
+import GuiAboutView from "./tabs/GuiAboutView";
+import GuiSkillsView from "./tabs/GuiSkillsView";
+import GuiContactView from "./tabs/GuiContactView";
 import resumePdf from "../assets/resume.pdf";
 
 const COMMANDS = {
-  help: "show available commands",
-  about: "about me",
-  skills: "tech stack",
-  projects: "featured projects",
-  contact: "get in touch",
-  neofetch: "system / profile card",
-  wallpaper: "load a new background",
-  clear: "clear terminal",
-  github: "open github profile",
-  resume: "download my resume",
+  help: "show available shell commands",
+  about: "bio, timeline & education",
+  skills: "technical stack breakdown",
+  projects: "featured repositories & demos",
+  contact: "transmission endpoints & email",
+  neofetch: "system profile hardware card",
+  theme: "switch color theme [matrix/cyberpunk/dracula/amber/monokai/tokyo]",
+  cursor: "switch cursor mode [reticle / dot / native]",
+  matrix: "launch falling digital rain screensaver",
+  wallpaper: "fetch a fresh background",
+  time: "display system time & session uptime",
+  history: "view shell command history",
+  resume: "download curriculum vitae (PDF)",
+  github: "open github profile in browser",
+  clear: "clear terminal output buffer",
 };
 
 const BOOT_LINES = [
-  { t: "boot", c: "BIOS  hafilOS v2.4.1 ................ OK" },
-  { t: "boot", c: "Loading kernel modules ............. OK" },
-  { t: "boot", c: "Mounting wallpaper engine .......... OK" },
-  { t: "boot", c: "Starting shell session ............. OK" },
+  { t: "boot", c: "BIOS  hafilOS v3.2.0-release ............. OK" },
+  { t: "boot", c: "Initializing CPU & neural modules ........ OK" },
+  { t: "boot", c: "Mounting theme engine & GPU shaders ...... OK" },
+  { t: "boot", c: "Network handshake: ESTABLISHED ........... OK" },
   { t: "gap", c: "" },
-  { t: "system", c: "Welcome to hafil@portfolio" },
-  { t: "system", c: 'Type "help" to see available commands.' },
+  { t: "system", c: "Welcome to hafil@portfolio (portshell v3.2)" },
+  { t: "system", c: 'Type "help" to see commands, or explore the tabs above.' },
 ];
 
 function preloadImage(src) {
@@ -46,107 +70,173 @@ function preloadImage(src) {
   });
 }
 
-export default function TerminalPortfolio() {
-  const [wallpaper, setWallpaper] = useState(null);
+export default function TerminalPortfolio({
+  cursorMode = "reticle",
+  onCursorModeChange,
+}) {
+  // Theme state
+  const [themeId, setThemeId] = useState(() => {
+    return localStorage.getItem("hafil_theme") || DEFAULT_THEME_ID;
+  });
+  const theme = useMemo(() => THEMES[themeId] || THEMES.phosphor, [themeId]);
+
+  // Audio state
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem("hafil_sound") === "true";
+  });
+
+  // UI display toggles
+  const [scanlines, setScanlines] = useState(true);
+  const [windowMode, setWindowMode] = useState("normal"); // "normal" | "fullscreen" | "compact"
+  const [activeTab, setActiveTab] = useState("terminal"); // "terminal" | "projects" | "about" | "skills" | "contact"
+  const [matrixActive, setMatrixActive] = useState(false);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+
+  // Background state
+  const [wallpaperIndex, setWallpaperIndex] = useState(() => {
+    const saved = localStorage.getItem("hafil_wallpaper_idx");
+    return saved !== null
+      ? parseInt(saved, 10) % WALLPAPERS.length
+      : Math.floor(Math.random() * WALLPAPERS.length);
+  });
+  const [wallpaper, setWallpaper] = useState(WALLPAPERS[0]?.url || null);
   const [bgLoaded, setBgLoaded] = useState(false);
+
+  // Shell state
   const [poweredOn, setPoweredOn] = useState(false);
   const [history, setHistory] = useState([]);
   const [input, setInput] = useState("");
   const [booting, setBooting] = useState(true);
+  const [commandHistory, setCommandHistory] = useState([]);
+  const [historyPointer, setHistoryPointer] = useState(-1);
+
+  // Session uptime ref (calculated on-demand without interval re-renders)
+  const sessionStartRef = useRef(Date.now());
+  const getUptimeFormatted = useCallback(() => {
+    const diff = Math.floor((Date.now() - sessionStartRef.current) / 1000);
+    const hrs = Math.floor(diff / 3600);
+    const mins = Math.floor((diff % 3600) / 60);
+    const secs = diff % 60;
+    return `${hrs > 0 ? `${hrs}h ` : ""}${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
+  }, []);
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
-  const loadWallpaper = useCallback(async () => {
-    setBgLoaded(false);
+  // Synchronize CSS custom properties when theme changes
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--term-primary", theme.primary);
+    root.style.setProperty("--term-primary-dim", theme.primaryDim);
+    root.style.setProperty("--term-primary-bright", theme.primaryBright);
+    root.style.setProperty("--term-accent", theme.accent);
+    root.style.setProperty("--term-secondary", theme.secondary);
+    root.style.setProperty("--term-danger", theme.danger);
+    root.style.setProperty("--term-bg", theme.bg);
+    root.style.setProperty("--term-panel", theme.panel);
+    root.style.setProperty("--term-panel2", theme.panel2);
+    root.style.setProperty("--term-hairline", theme.hairline);
+    root.style.setProperty("--term-hairline-strong", theme.hairlineStrong);
+    root.style.setProperty("--term-glow", theme.glow);
 
-    try {
-      const endpoints = [
-        "https://api.waifu.pics/sfw/waifu",
-        "https://api.waifu.pics/sfw/neko",
-        "https://api.waifu.pics/sfw/shinobu",
-        "https://api.waifu.pics/sfw/megumin",
-        "https://api.waifu.pics/sfw/smile",
-      ];
+    localStorage.setItem("hafil_theme", theme.id);
+  }, [theme]);
 
-      const endpoint =
-        endpoints[Math.floor(Math.random() * endpoints.length)];
+  // Sound toggle helper
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    localStorage.setItem("hafil_sound", String(next));
+    if (next) soundFx.playThemeSwitch(false);
+  };
 
-      const res = await fetch(endpoint);
-
-      if (!res.ok) {
-        throw new Error("fail");
-      }
-
-      const data = await res.json();
-
-      if (data?.url) {
-        await preloadImage(data.url);
-        setWallpaper(data.url);
-        setBgLoaded(true);
-        return;
-      }
-    } catch {
-      /* fall through to local wallpapers */
+  const switchTheme = (id) => {
+    if (THEMES[id]) {
+      setThemeId(id);
+      soundFx.playThemeSwitch(!soundEnabled);
+      setThemePickerOpen(false);
     }
+  };
 
-    const fallback =
-      wallpapers[Math.floor(Math.random() * wallpapers.length)];
+  // Wallpaper loader
+  const loadWallpaperByIndex = useCallback(async (idx) => {
+    const safeIdx = ((idx % WALLPAPERS.length) + WALLPAPERS.length) % WALLPAPERS.length;
+    setBgLoaded(false);
+    setWallpaperIndex(safeIdx);
+    localStorage.setItem("hafil_wallpaper_idx", String(safeIdx));
 
-    await preloadImage(fallback);
-    setWallpaper(fallback);
+    const selected = WALLPAPERS[safeIdx];
+    await preloadImage(selected.url);
+    setWallpaper(selected.url);
     setBgLoaded(true);
+    return selected;
   }, []);
 
-  useEffect(() => {
-    loadWallpaper();
-  }, [loadWallpaper]);
+  const nextWallpaper = useCallback(() => {
+    return loadWallpaperByIndex(wallpaperIndex + 1);
+  }, [loadWallpaperByIndex, wallpaperIndex]);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      setPoweredOn(true);
-    }, 60);
+    loadWallpaperByIndex(wallpaperIndex);
+  }, [loadWallpaperByIndex, wallpaperIndex]);
 
+  // Power on sequence
+  useEffect(() => {
+    const t = setTimeout(() => setPoweredOn(true), 60);
     return () => clearTimeout(t);
   }, []);
 
+  // Boot sequence lines
   useEffect(() => {
     if (!poweredOn) return;
-
     let i = 0;
-
     const id = setInterval(() => {
       if (i < BOOT_LINES.length) {
         setHistory((prev) => [
           ...prev,
           {
             ...BOOT_LINES[i],
-            key: `b${i}`,
+            key: `boot-${i}-${Date.now()}`,
           },
         ]);
-
         i += 1;
       } else {
         clearInterval(id);
         setBooting(false);
+        soundFx.playBoot(!soundEnabled);
       }
-    }, 140);
-
+    }, 120);
     return () => clearInterval(id);
-  }, [poweredOn]);
+  }, [poweredOn, soundEnabled]);
 
+  // Auto-scroll terminal to bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [history]);
+    if (activeTab === "terminal") {
+      bottomRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    }
+  }, [history, activeTab]);
 
+  // Auto-focus input on terminal tab activation
   useEffect(() => {
-    if (!booting) {
+    if (!booting && activeTab === "terminal") {
       inputRef.current?.focus();
     }
-  }, [booting]);
+  }, [booting, activeTab]);
+
+  // Global ESC key for matrix dismissal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setMatrixActive(false);
+        setThemePickerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const addLines = (lines) =>
     setHistory((prev) => [
@@ -157,17 +247,34 @@ export default function TerminalPortfolio() {
       })),
     ]);
 
+  // Inline Ghost suggestion lookup
+  const ghostSuggestion = useMemo(() => {
+    if (!input.trim()) return "";
+    const lower = input.toLowerCase().trim();
+    const match = Object.keys(COMMANDS).find(
+      (cmd) => cmd.startsWith(lower) && cmd !== lower
+    );
+    if (match) {
+      return match.slice(lower.length);
+    }
+    return "";
+  }, [input]);
+
   const runCommand = async (raw) => {
-    const cmd = raw.trim().toLowerCase();
+    const trimmed = raw.trim();
+    const parts = trimmed.split(" ");
+    const cmd = parts[0]?.toLowerCase() || "";
+    const arg = parts[1]?.toLowerCase() || "";
 
     if (!cmd || booting) return;
 
-    addLines([
-      {
-        t: "input",
-        c: cmd,
-      },
-    ]);
+    soundFx.playEnter(!soundEnabled);
+
+    // Save to command history
+    setCommandHistory((prev) => [trimmed, ...prev.filter((c) => c !== trimmed)]);
+    setHistoryPointer(-1);
+
+    addLines([{ t: "input", c: trimmed }]);
 
     switch (cmd) {
       case "clear":
@@ -177,6 +284,7 @@ export default function TerminalPortfolio() {
       case "help":
         addLines([
           { t: "rule" },
+          { t: "system", c: "AVAILABLE COMMANDS (type or click any command to execute):" },
           ...Object.entries(COMMANDS).map(([k, v]) => ({
             t: "cmdline",
             k,
@@ -188,730 +296,861 @@ export default function TerminalPortfolio() {
 
       case "about":
         addLines([
-          {
-            t: "kv",
-            k: "name",
-            v: profile.name,
-          },
-          {
-            t: "kv",
-            k: "role",
-            v: profile.role,
-          },
-          {
-            t: "output",
-            c: profile.bio,
-          },
-          {
-            t: "kv",
-            k: "location",
-            v: profile.location,
-          },
+          { t: "rule" },
+          { t: "kv", k: "identity", v: `${profile.name} (@${profile.username})` },
+          { t: "kv", k: "role", v: profile.role },
+          { t: "kv", k: "location", v: profile.location },
+          { t: "output", c: profile.bio },
           {
             t: "output",
             c: profile.available
-              ? "status   · ● available for work"
-              : "status   · ○ busy",
+              ? "● STATUS: Available for work & collaborations"
+              : "○ STATUS: Busy",
           },
+          {
+            t: "tab_hint",
+            tab: "about",
+            c: "💡 Tip: Switch to the 'about' tab above for the visual timeline & resume view.",
+          },
+          { t: "rule" },
         ]);
         return;
 
       case "skills":
         addLines([
           { t: "rule" },
+          { t: "system", c: "SKILLS MATRIX (Proficiency Breakdown):" },
           {
             t: "kv",
             k: "frontend",
-            v: skills.frontend.join("  "),
+            v: skills.frontend.map((s) => (typeof s === "string" ? s : s.name)).join("  "),
           },
           {
             t: "kv",
             k: "backend",
-            v: skills.backend.join("  "),
+            v: skills.backend.map((s) => (typeof s === "string" ? s : s.name)).join("  "),
           },
           {
             t: "kv",
             k: "ai / ml",
-            v: skills.ai.join("  "),
+            v: skills.ai.map((s) => (typeof s === "string" ? s : s.name)).join("  "),
           },
           {
             t: "kv",
             k: "tools",
-            v: skills.tools.join("  "),
+            v: skills.tools.map((s) => (typeof s === "string" ? s : s.name)).join("  "),
+          },
+          {
+            t: "tab_hint",
+            tab: "skills",
+            c: "💡 Tip: Switch to 'skills' tab above to view interactive animated skill bars.",
           },
           { t: "rule" },
         ]);
         return;
 
       case "projects":
-        addLines([
-          {
-            t: "output",
-            c: "featured projects",
-          },
-        ]);
-
+        addLines([{ t: "output", c: "FETCHING FEATURED REPOSITORIES..." }]);
         projects.forEach((p, i) => {
-          addLines([
-            {
-              t: "project",
-              project: p,
-              index: i + 1,
-            },
-          ]);
+          addLines([{ t: "project", project: p, index: i + 1 }]);
         });
-
         addLines([
           {
-            t: "dim",
-            c: 'tip: click a repo name, or type "github"',
+            t: "tab_hint",
+            tab: "projects",
+            c: "💡 Tip: Open the 'projects' tab for category filters, search, and one-click clone.",
           },
         ]);
-
         return;
 
       case "contact":
         addLines([
           { t: "rule" },
+          { t: "kv", k: "email", v: profile.email },
+          { t: "kv", k: "github", v: profile.github.replace("https://", "") },
+          { t: "kv", k: "linkedin", v: profile.linkedin.replace("https://", "") },
+          { t: "kv", k: "site", v: profile.portfolio.replace("https://", "") },
           {
-            t: "kv",
-            k: "github",
-            v: profile.github.replace("https://", ""),
-          },
-          {
-            t: "kv",
-            k: "linkedin",
-            v: profile.linkedin.replace("https://", ""),
-          },
-          {
-            t: "kv",
-            k: "site",
-            v: profile.portfolio.replace("https://", ""),
+            t: "tab_hint",
+            tab: "contact",
+            c: "💡 Tip: Switch to 'contact' tab to send a direct message via interactive form.",
           },
           { t: "rule" },
         ]);
         return;
 
       case "neofetch":
+        addLines([{ t: "neofetch", uptime: getUptimeFormatted() }]);
+        return;
+
+      case "theme":
+        if (arg && THEMES[arg]) {
+          switchTheme(arg);
+          addLines([
+            { t: "system", c: `Theme switched to "${THEMES[arg].name}" (${THEMES[arg].badge}) ✓` },
+          ]);
+        } else {
+          addLines([
+            { t: "system", c: `Current theme: ${theme.name}` },
+            { t: "output", c: "Available themes: " + Object.keys(THEMES).join(" | ") },
+            { t: "theme_selector" },
+          ]);
+        }
+        return;
+
+      case "cursor":
+        if (arg === "native" || arg === "reticle" || arg === "dot") {
+          onCursorModeChange?.(arg);
+          addLines([
+            { t: "system", c: `Cursor mode set to "${arg.toUpperCase()}" ✓` },
+          ]);
+        } else {
+          const modes = ["reticle", "dot", "native"];
+          const nextIndex = (modes.indexOf(cursorMode) + 1) % modes.length;
+          const nextMode = modes[nextIndex];
+          onCursorModeChange?.(nextMode);
+          addLines([
+            { t: "system", c: `Cursor mode switched to "${nextMode.toUpperCase()}". (Options: "cursor reticle" | "cursor dot" | "cursor native")` },
+          ]);
+        }
+        return;
+
+      case "matrix":
+        setMatrixActive(true);
+        addLines([{ t: "system", c: "Matrix screensaver initiated. Press ESC to terminate." }]);
+        return;
+
+      case "time":
+      case "date":
         addLines([
-          {
-            t: "neofetch",
-          },
+          { t: "kv", k: "local_time", v: new Date().toString() },
+          { t: "kv", k: "uptime", v: getUptimeFormatted() },
         ]);
         return;
 
-      case "wallpaper":
-        addLines([
-          {
-            t: "output",
-            c: "fetching new wallpaper...",
-          },
-        ]);
+      case "history":
+        if (commandHistory.length === 0) {
+          addLines([{ t: "dim", c: "No command history recorded yet." }]);
+        } else {
+          addLines([
+            { t: "system", c: "COMMAND HISTORY:" },
+            ...commandHistory.map((h, idx) => ({
+              t: "kv",
+              k: `#${idx + 1}`,
+              v: h,
+            })),
+          ]);
+        }
+        return;
 
-        loadWallpaper().then(() => {
+      case "wallpaper": {
+        if (arg === "list") {
+          addLines([
+            { t: "rule" },
+            {
+              t: "system",
+              c: `CURATED WALLPAPERS (${WALLPAPERS.length} HD Backgrounds):`,
+            },
+            ...WALLPAPERS.map((w, idx) => ({
+              t: "kv",
+              k: `[${idx + 1}]`,
+              v: `${w.title} · ${w.category}${idx === wallpaperIndex ? " [ACTIVE]" : ""}`,
+            })),
+            {
+              t: "dim",
+              c: 'Tip: Type "wallpaper <1-18>" or click WP button to change.',
+            },
+            { t: "rule" },
+          ]);
+          return;
+        }
+
+        const num = parseInt(arg, 10);
+        if (!isNaN(num) && num >= 1 && num <= WALLPAPERS.length) {
+          addLines([{ t: "output", c: `Loading wallpaper [${num}]...` }]);
+          loadWallpaperByIndex(num - 1).then((wp) => {
+            addLines([
+              {
+                t: "system",
+                c: `Wallpaper updated: "${wp.title}" (${wp.category}) ✓`,
+              },
+            ]);
+          });
+          return;
+        }
+
+        addLines([{ t: "output", c: "Loading next wallpaper..." }]);
+        nextWallpaper().then((wp) => {
           addLines([
             {
               t: "system",
-              c: "wallpaper updated ✓",
+              c: `Wallpaper updated: "${wp.title}" (${wp.category}) ✓`,
             },
           ]);
         });
-
-        return;
-
-      case "github":
-        window.open(profile.github, "_blank", "noreferrer");
-
-        addLines([
-          {
-            t: "output",
-            c: "opening github...",
-          },
-        ]);
-
-        return;
-
-      case "resume": {
-        try {
-          addLines([
-            {
-              t: "output",
-              c: "preparing resume...",
-            },
-          ]);
-
-          const response = await fetch(resumePdf);
-
-          if (!response.ok) {
-            throw new Error("Failed to load resume");
-          }
-
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-
-          const link = document.createElement("a");
-          link.href = blobUrl;
-          link.download = "Resume.pdf";
-
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-
-          // Give the browser time to start the download before
-          // releasing the temporary object URL.
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-
-          addLines([
-            {
-              t: "system",
-              c: "resume download started ✓",
-            },
-          ]);
-        } catch (error) {
-          console.error("Resume download error:", error);
-
-          addLines([
-            {
-              t: "error",
-              c: "failed to download resume",
-            },
-          ]);
-        }
-
         return;
       }
 
-      default:
+      case "github":
+        window.open(profile.github, "_blank", "noreferrer");
+        addLines([{ t: "output", c: `Opening GitHub profile (${profile.github})...` }]);
+        return;
+
+      case "resume":
+        try {
+          addLines([{ t: "output", c: "Preparing resume transmission..." }]);
+          const response = await fetch(resumePdf);
+          if (!response.ok) throw new Error("Failed to load resume");
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = blobUrl;
+          link.download = "Hafil_Razak_Resume.pdf";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          addLines([{ t: "system", c: "Resume downloaded successfully ✓" }]);
+        } catch {
+          window.open(resumePdf, "_blank");
+          addLines([{ t: "system", c: "Resume opened in browser tab ✓" }]);
+        }
+        return;
+
+      case "sudo":
+        soundFx.playError(!soundEnabled);
         addLines([
           {
             t: "error",
-            c: `command not found: ${cmd} — try "help"`,
+            c: `hafil@portfolio: User is not in the sudoers file. This incident will be reported to Hafil.`,
+          },
+        ]);
+        return;
+
+      default:
+        soundFx.playError(!soundEnabled);
+        addLines([
+          {
+            t: "error",
+            c: `command not found: "${cmd}" — type "help" or click a suggestion chip below.`,
           },
         ]);
         return;
     }
   };
 
+  // Keyboard Navigation: Up/Down for history, Tab for autocomplete, Ctrl+L for clear
+  const handleKeyDown = (e) => {
+    soundFx.playKeyClick(!soundEnabled);
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      if (ghostSuggestion) {
+        setInput((prev) => prev + ghostSuggestion);
+      } else {
+        const lower = input.toLowerCase().trim();
+        const match = Object.keys(COMMANDS).find((cmd) => cmd.startsWith(lower));
+        if (match) setInput(match);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (commandHistory.length > 0) {
+        const nextPtr = Math.min(historyPointer + 1, commandHistory.length - 1);
+        setHistoryPointer(nextPtr);
+        setInput(commandHistory[nextPtr]);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyPointer > 0) {
+        const nextPtr = historyPointer - 1;
+        setHistoryPointer(nextPtr);
+        setInput(commandHistory[nextPtr]);
+      } else if (historyPointer === 0) {
+        setHistoryPointer(-1);
+        setInput("");
+      }
+      return;
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === "l") {
+      e.preventDefault();
+      setHistory([]);
+      return;
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      setInput("");
+      return;
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-
     runCommand(input);
-
     setInput("");
   };
 
   return (
-    <div className="crt-root">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
-
-        .crt-root {
-          --panel: #070b08;
-          --panel-2: #0b110d;
-          --hairline: rgba(74, 222, 128, 0.14);
-          --hairline-strong: rgba(74, 222, 128, 0.28);
-          --phosphor: var(--term-green);
-          --phosphor-bright: #b9ffd4;
-          --phosphor-mid: #4c9c74;
-          --phosphor-dim: var(--term-green-dim);
-          --amber: #ffc266;
-          --sky: #7cd3ff;
-          --red: #ff8080;
-          --pixel: 'VT323', monospace;
-
-          position: relative;
-          min-height: 100vh;
-          overflow: hidden;
-          color: var(--phosphor);
-        }
-
-        .crt-shell {
-          transform: scaleY(0.015);
-          filter: brightness(3.2);
-          opacity: 0;
-        }
-
-        .crt-shell.on {
-          animation: power-on 620ms cubic-bezier(0.2, 0.9, 0.2, 1)
-            forwards;
-        }
-
-        @keyframes power-on {
-          0% {
-            transform: scaleY(0.015);
-            filter: brightness(3.4);
-            opacity: 0.2;
-          }
-
-          55% {
-            transform: scaleY(1);
-            filter: brightness(1.8);
-            opacity: 1;
-          }
-
-          70% {
-            transform: scaleY(1);
-            filter: brightness(0.7);
-            opacity: 1;
-          }
-
-          100% {
-            transform: scaleY(1);
-            filter: brightness(1);
-            opacity: 1;
-          }
-        }
-
-        .crt-sweep {
-          position: fixed;
-          inset: 0;
-          pointer-events: none;
-          z-index: 6;
-          background: linear-gradient(
-            to bottom,
-            transparent 0%,
-            rgba(126, 242, 168, 0.05) 50%,
-            transparent 100%
-          );
-          background-size: 100% 220%;
-          animation: sweep 7s linear infinite;
-          opacity: 0.6;
-        }
-
-        @keyframes sweep {
-          0% {
-            background-position: 0 -220%;
-          }
-
-          100% {
-            background-position: 0 220%;
-          }
-        }
-
-        .glow-sm {
-          text-shadow: 0 0 6px rgba(126, 242, 168, 0.45);
-        }
-
-        .ascii-name {
-          font-family: var(--pixel);
-          font-size: clamp(2.1rem, 7vw, 3.2rem);
-          line-height: 1;
-          letter-spacing: 0.04em;
-          color: var(--phosphor-bright);
-          text-shadow:
-            0 0 14px rgba(126, 242, 168, 0.55),
-            2px 0 0 rgba(255, 128, 128, 0.18),
-            -2px 0 0 rgba(124, 211, 255, 0.18);
-        }
-
-        .term-window {
-          border: 1px solid var(--hairline);
-          background: linear-gradient(
-            180deg,
-            var(--panel) 0%,
-            var(--panel-2) 100%
-          );
-          border-radius: 14px;
-        }
-
-        .term-titlebar {
-          border-bottom: 1px solid var(--hairline);
-          background: linear-gradient(
-            90deg,
-            rgba(10, 16, 12, 0.9),
-            rgba(12, 18, 14, 0.9)
-          );
-        }
-
-        .term-dot {
-          box-shadow: 0 0 6px currentColor;
-        }
-
-        .rule {
-          border-top: 1px solid var(--hairline);
-          margin: 6px 0;
-        }
-
-        .kv-row {
-          display: flex;
-          gap: 10px;
-        }
-
-        .kv-key {
-          color: var(--phosphor-mid);
-          min-width: 92px;
-          flex-shrink: 0;
-        }
-
-        .kv-key::before {
-          content: '·';
-          margin-right: 8px;
-          color: var(--phosphor-dim);
-        }
-
-        .cmd-key {
-          color: var(--amber);
-          min-width: 96px;
-          display: inline-block;
-        }
-
-        .project-card {
-          border: 1px solid var(--hairline);
-          background: rgba(20, 40, 28, 0.18);
-          border-radius: 10px;
-          transition:
-            border-color 160ms ease,
-            background 160ms ease,
-            box-shadow 160ms ease;
-        }
-
-        .project-card:hover {
-          border-color: var(--hairline-strong);
-          background: rgba(20, 40, 28, 0.32);
-          box-shadow: 0 0 24px -10px rgba(74, 222, 128, 0.4);
-        }
-
-        .chip {
-          border: 1px solid var(--hairline);
-          color: var(--phosphor-mid);
-        }
-
-        .status-btn {
-          transition:
-            background 140ms ease,
-            color 140ms ease;
-        }
-
-        .status-btn:hover {
-          background: rgba(126, 242, 168, 0.08);
-          color: var(--phosphor-bright);
-        }
-
-        .prompt-user {
-          color: var(--phosphor-mid);
-        }
-
-        .prompt-colon {
-          color: var(--phosphor-dim);
-        }
-
-        .prompt-tilde {
-          color: var(--sky);
-        }
-
-        .prompt-dollar {
-          color: var(--phosphor-mid);
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .crt-shell,
-          .crt-shell.on,
-          .crt-sweep,
-          .caret {
-            animation: none !important;
-            opacity: 1 !important;
-            transform: none !important;
-          }
-        }
-      `}</style>
-
-      {/* Background photo */}
+    <div
+      className="relative min-h-screen overflow-hidden select-none font-mono"
+      style={{
+        backgroundColor: "var(--term-bg)",
+        color: "var(--term-primary)",
+      }}
+    >
+      {/* Background wallpaper with smooth crossfade */}
       <div
-        className={`fixed inset-0 scale-110 bg-cover bg-center bg-no-repeat transition-all duration-1000 ${
-          bgLoaded
-            ? "opacity-100 blur-0"
-            : "opacity-0 blur-sm"
+        className={`fixed inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-300 pointer-events-none ${
+          bgLoaded ? "opacity-100" : "opacity-0"
         }`}
         style={{
-          backgroundImage: wallpaper
-            ? `url(${wallpaper})`
-            : "none",
+          backgroundImage: wallpaper ? `url(${wallpaper})` : "none",
           backgroundColor: "var(--term-bg)",
+          transform: "translateZ(0)",
         }}
       />
 
-      <div className="fixed inset-0 bg-gradient-to-b from-black/45 via-black/25 to-black/55" />
+      {/* Dark Ambient Overlays (Zero GPU blur overhead) */}
+      <div className="fixed inset-0 bg-black/75 pointer-events-none" />
+      <div className="vignette fixed inset-0 z-[4]" />
+      {scanlines && <div className="scanlines fixed inset-0 z-[5] opacity-40" />}
 
-      <div className="vignette fixed inset-0 z-[5]" />
+      {/* Fullscreen Matrix Rain Screen */}
+      {matrixActive && (
+        <MatrixRain
+          color={theme.primary}
+          onClose={() => setMatrixActive(false)}
+        />
+      )}
 
-      <div className="scanlines fixed inset-0 z-[5] opacity-60" />
-
-      <div className="crt-sweep" />
-
+      {/* Top Notification / Wallpaper Status */}
       {!bgLoaded && (
         <div
-          className="fixed right-4 top-4 z-30 rounded-full border px-3 py-1 text-[11px] backdrop-blur"
+          className="fixed right-4 top-4 z-40 rounded-full border px-3 py-1 text-[11px] backdrop-blur"
           style={{
-            borderColor: "var(--hairline-strong)",
-            background: "rgba(0,0,0,0.6)",
-            color: "var(--phosphor)",
+            borderColor: "var(--term-hairline-strong)",
+            background: "rgba(0,0,0,0.7)",
+            color: "var(--term-primary)",
           }}
         >
           loading wallpaper...
         </div>
       )}
 
+      {/* Main Terminal Window Frame */}
       <div
-        className={`crt-shell ${
-          poweredOn ? "on" : ""
-        } relative z-20 mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-3 py-6 sm:px-4 md:py-10`}
+        className={`relative z-20 mx-auto flex min-h-screen flex-col justify-center px-2 py-4 transition-all duration-300 sm:px-4 md:py-6 ${
+          windowMode === "fullscreen"
+            ? "max-w-[96vw] min-h-[96vh] my-auto"
+            : windowMode === "compact"
+            ? "max-w-xl"
+            : "max-w-4xl"
+        }`}
       >
-        <div className="mb-4 flex items-end justify-between px-1">
-          <h1 className="ascii-name">
-            hafil@portfolio
-          </h1>
-
-          <Sparkles
-            size={16}
-            className="mb-2 hidden text-[var(--phosphor-dim)] sm:block"
-          />
-        </div>
-
-        <div className="term-window shell-glow overflow-hidden">
-          <div className="term-titlebar flex items-center gap-2 px-4 py-2.5">
-            <div className="flex gap-1.5">
-              <span className="term-dot h-3 w-3 rounded-full bg-red-400/90 text-red-400" />
-              <span className="term-dot h-3 w-3 rounded-full bg-amber-300/90 text-amber-300" />
-              <span className="term-dot h-3 w-3 rounded-full bg-green-400/90 text-green-400" />
-            </div>
-
-            <div
-              className="ml-2 flex items-center gap-2 text-xs"
+        {/* Terminal Header Bar */}
+        <header className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+          <div className="flex items-center gap-2">
+            <h1
+              className="text-lg sm:text-xl font-extrabold tracking-tight"
               style={{
-                color: "var(--phosphor-mid)",
+                fontFamily: "'VT323', monospace",
+                color: theme.primaryBright,
+                textShadow: `0 0 12px ${theme.glow}`,
               }}
             >
-              <TerminalIcon size={13} />
-
-              <span className="tracking-wide">
-                hafil@portfolio: ~
-              </span>
-            </div>
-
-            <div
-              className="ml-auto flex items-center gap-1.5 text-[10px]"
+              hafil@portfolio: ~
+            </h1>
+            <span
+              className="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded border"
               style={{
-                color: "var(--phosphor-dim)",
+                borderColor: "var(--term-hairline)",
+                color: "var(--term-primary-dim)",
               }}
             >
-              <span
-                className={
-                  profile.available
-                    ? "text-green-400"
-                    : "text-neutral-500"
-                }
-              >
-                ●
-              </span>
-
-              {profile.available ? "online" : "away"}
-            </div>
+              git:(main)
+            </span>
           </div>
 
+          <HeaderTelemetry available={profile.available} />
+        </header>
+
+        {/* Outer Window Box (Optimized GPU rendering) */}
+        <div
+          className="shell-glow overflow-hidden rounded-xl border transition-all duration-200"
+          style={{
+            borderColor: "var(--term-hairline-strong)",
+            background: "linear-gradient(180deg, var(--term-panel) 0%, var(--term-panel2) 100%)",
+          }}
+        >
+          {/* Titlebar with Window Buttons and Utility Toggles */}
           <div
-            className="term-scroll h-[62vh] overflow-y-auto p-4 sm:h-[64vh] sm:p-5"
-            onClick={() =>
-              !booting && inputRef.current?.focus()
-            }
+            className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs sm:px-4"
+            style={{
+              borderColor: "var(--term-hairline)",
+              background: "rgba(0, 0, 0, 0.4)",
+            }}
           >
-            <div
-              className="mb-5 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center"
-              style={{
-                borderColor: "var(--hairline)",
-              }}
-            >
-              <div className="relative shrink-0">
-                <img
-                  src={profile.avatar}
-                  alt={profile.name}
-                  className="h-14 w-14 rounded-xl border object-cover sm:h-16 sm:w-16"
-                  style={{
-                    borderColor:
-                      "var(--hairline-strong)",
+            {/* Functional Window Dots */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  title="Clear terminal buffer"
+                  onClick={() => {
+                    setHistory([]);
+                    soundFx.playKeyClick(!soundEnabled);
                   }}
-                />
+                  className="group relative h-3 w-3 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition"
+                >
+                  <RotateCcw size={8} className="text-black opacity-0 group-hover:opacity-100" />
+                </button>
 
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2"
-                  style={{
-                    borderColor: "var(--panel)",
-                    background: "#4ade80",
+                <button
+                  type="button"
+                  title="Toggle compact mode"
+                  onClick={() => {
+                    setWindowMode((prev) => (prev === "compact" ? "normal" : "compact"));
+                    soundFx.playKeyClick(!soundEnabled);
                   }}
-                />
+                  className="group relative h-3 w-3 rounded-full bg-amber-400/80 hover:bg-amber-400 flex items-center justify-center transition"
+                >
+                  <Minimize2 size={8} className="text-black opacity-0 group-hover:opacity-100" />
+                </button>
+
+                <button
+                  type="button"
+                  title="Toggle fullscreen mode"
+                  onClick={() => {
+                    setWindowMode((prev) => (prev === "fullscreen" ? "normal" : "fullscreen"));
+                    soundFx.playKeyClick(!soundEnabled);
+                  }}
+                  className="group relative h-3 w-3 rounded-full bg-green-500/80 hover:bg-green-500 flex items-center justify-center transition"
+                >
+                  <Maximize2 size={8} className="text-black opacity-0 group-hover:opacity-100" />
+                </button>
               </div>
 
-              <div>
-                <h2
-                  className="glow-sm text-lg font-bold tracking-tight sm:text-xl"
-                  style={{
-                    color:
-                      "var(--phosphor-bright)",
-                  }}
-                >
-                  {profile.name}
-                </h2>
+              <span className="ml-2 font-mono text-[11px]" style={{ color: "var(--term-primary-dim)" }}>
+                portshell v3.2
+              </span>
+            </div>
 
-                <p
-                  className="text-xs sm:text-sm"
+            {/* Quick Actions (Sound, Theme, Scanlines, Matrix) */}
+            <div className="flex items-center gap-2 text-[11px]">
+              {/* Theme Picker Dropdown Trigger */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setThemePickerOpen((prev) => !prev)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded border transition"
                   style={{
-                    color:
-                      "var(--phosphor-mid)",
+                    borderColor: "var(--term-hairline)",
+                    background: "rgba(0,0,0,0.3)",
+                    color: theme.primaryBright,
                   }}
+                  title="Change Color Theme"
                 >
-                  {profile.role}
-                </p>
+                  <Palette size={12} style={{ color: theme.primary }} />
+                  <span className="hidden sm:inline">{theme.name}</span>
+                </button>
 
-                <div
-                  className="mt-1 flex flex-wrap items-center gap-3 text-[11px]"
-                  style={{
-                    color:
-                      "var(--phosphor-dim)",
-                  }}
-                >
-                  <span className="flex items-center gap-1">
-                    <MapPin size={11} />
-                    {profile.location}
-                  </span>
-
-                  <a
-                    href={profile.github}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1 transition hover:text-[var(--phosphor-bright)]"
+                {themePickerOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-1 z-50 w-48 rounded-lg border p-1.5 shadow-2xl backdrop-blur-lg"
+                    style={{
+                      borderColor: "var(--term-hairline-strong)",
+                      backgroundColor: "var(--term-panel)",
+                    }}
                   >
-                    <Github size={11} />
-                    @{profile.username}
-                  </a>
-                </div>
+                    <div className="text-[10px] px-2 py-1 uppercase text-[var(--term-primary-dim)] font-bold">
+                      SELECT THEME
+                    </div>
+                    {Object.values(THEMES).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => switchTheme(t.id)}
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition text-left"
+                        style={{
+                          backgroundColor: themeId === t.id ? `${t.primary}22` : "transparent",
+                          color: themeId === t.id ? t.primaryBright : "var(--term-primary-bright)",
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: t.primary }}
+                          />
+                          <span>{t.name}</span>
+                        </div>
+                        <span className="text-[9px] text-[var(--term-primary-dim)]">
+                          {t.badge}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
 
-            <div className="space-y-1 text-[13px] leading-relaxed sm:text-sm">
-              <AnimatePresence initial={false}>
-                {history.map((item) => (
-                  <motion.div
-                    key={item.key}
-                    initial={{
-                      opacity: 0,
-                      x: -6,
-                    }}
-                    animate={{
-                      opacity: 1,
-                      x: 0,
-                    }}
-                    transition={{
-                      duration: 0.12,
-                    }}
-                  >
-                    <HistoryLine item={item} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-
-              <div ref={bottomRef} />
-            </div>
-
-            {!booting && (
-              <form
-                onSubmit={handleSubmit}
-                className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1"
+              {/* Cursor Mode Toggle Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  const modes = ["reticle", "dot", "native"];
+                  const next = modes[(modes.indexOf(cursorMode) + 1) % modes.length];
+                  onCursorModeChange?.(next);
+                  soundFx.playKeyClick(!soundEnabled);
+                }}
+                className="px-2 py-0.5 rounded border text-[10px] transition hidden sm:inline-flex items-center gap-1 font-mono"
+                style={{
+                  borderColor: "var(--term-hairline)",
+                  color: cursorMode === "native" ? "var(--term-primary-dim)" : theme.primaryBright,
+                  background: cursorMode !== "native" ? `${theme.primary}18` : "rgba(0,0,0,0.3)",
+                }}
+                title="Toggle Cursor: Reticle (1:1 HUD) / Dot (Laser) / Native (OS Hardware)"
               >
-                <span className="prompt-user shrink-0 text-[13px] sm:text-sm">
-                  hafil@portfolio
-                </span>
+                CUR: {cursorMode.toUpperCase()}
+              </button>
 
-                <span className="prompt-colon">
-                  :
-                </span>
+              {/* Wallpaper Cycle Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  nextWallpaper();
+                  soundFx.playKeyClick(!soundEnabled);
+                }}
+                className="px-2 py-0.5 rounded border text-[10px] transition hidden sm:inline-flex items-center gap-1 font-mono"
+                style={{
+                  borderColor: "var(--term-hairline)",
+                  color: theme.primaryBright,
+                  background: "rgba(0,0,0,0.3)",
+                }}
+                title={`Current: "${WALLPAPERS[wallpaperIndex]?.title}" (${WALLPAPERS[wallpaperIndex]?.category}) — Click to cycle`}
+              >
+                WP: {wallpaperIndex + 1}/{WALLPAPERS.length} ↻
+              </button>
 
-                <span className="prompt-tilde">
-                  ~
-                </span>
+              {/* Sound FX Toggle */}
+              <button
+                type="button"
+                onClick={toggleSound}
+                className="p-1 rounded border transition"
+                style={{
+                  borderColor: "var(--term-hairline)",
+                  background: soundEnabled ? `${theme.primary}22` : "rgba(0,0,0,0.3)",
+                  color: soundEnabled ? theme.primaryBright : "var(--term-primary-dim)",
+                }}
+                title={soundEnabled ? "Mute audio synthesizer" : "Enable retro 8-bit sound effects"}
+              >
+                {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+              </button>
 
-                <span className="prompt-dollar">
-                  $
-                </span>
+              {/* Scanline CRT Toggle */}
+              <button
+                type="button"
+                onClick={() => setScanlines((prev) => !prev)}
+                className="px-1.5 py-0.5 rounded border text-[10px] transition hidden sm:inline-block"
+                style={{
+                  borderColor: "var(--term-hairline)",
+                  color: scanlines ? theme.primaryBright : "var(--term-primary-dim)",
+                }}
+                title="Toggle CRT Scanlines"
+              >
+                CRT: {scanlines ? "ON" : "OFF"}
+              </button>
 
-                <input
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) =>
-                    setInput(e.target.value)
-                  }
-                  className="min-w-[12rem] flex-1 bg-transparent outline-none"
-                  style={{
-                    color:
-                      "var(--phosphor-bright)",
-                    caretColor:
-                      "var(--phosphor)",
-                  }}
-                  placeholder="type a command..."
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-
-                <span
-                  className="caret"
-                  style={{
-                    color:
-                      "var(--phosphor)",
-                  }}
-                >
-                  ▌
-                </span>
-              </form>
-            )}
+              {/* Matrix Screensaver Trigger */}
+              <button
+                type="button"
+                onClick={() => setMatrixActive(true)}
+                className="px-1.5 py-0.5 rounded border text-[10px] transition"
+                style={{
+                  borderColor: "var(--term-hairline)",
+                  color: theme.primaryBright,
+                }}
+                title="Launch Matrix Screensaver"
+              >
+                [MATRIX]
+              </button>
+            </div>
           </div>
 
+          {/* Navigation Tabs Bar */}
+          <div
+            className="flex items-center border-b px-2 overflow-x-auto term-scroll bg-black/25 text-xs"
+            style={{ borderColor: "var(--term-hairline)" }}
+          >
+            {[
+              { id: "terminal", label: "terminal.sh", icon: TerminalIcon },
+              { id: "projects", label: "projects.json", icon: FolderGit2 },
+              { id: "about", label: "about.md", icon: Sparkles },
+              { id: "skills", label: "skills.yaml", icon: Cpu },
+              { id: "contact", label: "contact.env", icon: Mail },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    soundFx.playKeyClick(!soundEnabled);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-mono text-[11px] sm:text-xs transition-all shrink-0 ${
+                    isActive
+                      ? "border-current font-bold"
+                      : "border-transparent opacity-60 hover:opacity-100"
+                  }`}
+                  style={{
+                    color: isActive ? theme.primaryBright : "var(--term-primary-dim)",
+                    borderColor: isActive ? theme.primary : "transparent",
+                    background: isActive ? `${theme.primary}12` : "transparent",
+                  }}
+                >
+                  <Icon size={12} style={{ color: isActive ? theme.primary : "inherit" }} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Main Content Area: Terminal or GUI Tab */}
+          <div
+            className={`term-scroll overflow-y-auto p-3 sm:p-5 transition-all duration-300 ${
+              windowMode === "fullscreen"
+                ? "h-[75vh]"
+                : windowMode === "compact"
+                ? "h-[50vh]"
+                : "h-[62vh] sm:h-[65vh]"
+            }`}
+          >
+            {activeTab === "terminal" && (
+              <div
+                className="h-full flex flex-col justify-between"
+                onClick={() => !booting && inputRef.current?.focus()}
+              >
+                {/* Profile Header Snippet in Terminal */}
+                <div
+                  className="mb-4 flex flex-col gap-3 border-b pb-3.5 sm:flex-row sm:items-center"
+                  style={{ borderColor: "var(--term-hairline)" }}
+                >
+                  <div className="relative shrink-0">
+                    <img
+                      src={profile.avatar}
+                      alt={profile.name}
+                      className="h-12 w-12 rounded-lg border object-cover sm:h-14 sm:w-14"
+                      style={{ borderColor: "var(--term-hairline-strong)" }}
+                    />
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2"
+                      style={{
+                        borderColor: "var(--term-panel)",
+                        backgroundColor: profile.available ? "#4ade80" : "#9ca3af",
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <h2
+                        className="text-base font-bold sm:text-lg"
+                        style={{ color: theme.primaryBright }}
+                      >
+                        {profile.name}
+                      </h2>
+                      <span className="text-[10px] text-[var(--term-primary-dim)] font-mono">
+                        {profile.location}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[var(--term-primary-dim)]">
+                      {profile.role}
+                    </p>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px]">
+                      <a
+                        href={profile.github}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 hover:underline"
+                        style={{ color: theme.primaryBright }}
+                      >
+                        <Github size={11} />
+                        @{profile.username}
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => runCommand("help")}
+                        className="text-[10px] underline hover:text-[var(--term-primary-bright)]"
+                        style={{ color: theme.primaryDim }}
+                      >
+                        type &ldquo;help&rdquo; for options
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* History Stream (Memoized to eliminate re-render on typing) */}
+                <HistoryStream
+                  history={history}
+                  theme={theme}
+                  onRunCommand={runCommand}
+                  onSwitchTab={setActiveTab}
+                  onSwitchTheme={switchTheme}
+                />
+                <div ref={bottomRef} />
+
+                {/* Interactive Shell Prompt Form */}
+                {!booting && (
+                  <form
+                    onSubmit={handleSubmit}
+                    className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2.5"
+                    style={{ borderColor: "var(--term-hairline)" }}
+                  >
+                    <span
+                      className="font-bold text-xs sm:text-sm shrink-0"
+                      style={{ color: theme.promptUser }}
+                    >
+                      hafil@portfolio
+                    </span>
+                    <span style={{ color: "var(--term-primary-dim)" }}>:</span>
+                    <span
+                      className="text-xs sm:text-sm"
+                      style={{ color: theme.promptPath }}
+                    >
+                      ~
+                    </span>
+                    <span style={{ color: "var(--term-primary-dim)" }}>$</span>
+
+                    <div className="relative flex-1 min-w-[14rem]">
+                      <input
+                        ref={inputRef}
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        className="w-full bg-transparent outline-none font-mono text-xs sm:text-sm"
+                        style={{
+                          color: theme.primaryBright,
+                          caretColor: theme.primary,
+                        }}
+                        placeholder="type a command... (try 'help' or 'projects')"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+
+                      {/* Ghost Autocomplete text suggestion */}
+                      {ghostSuggestion && (
+                        <div
+                          className="pointer-events-none absolute left-0 top-0 font-mono text-xs sm:text-sm select-none"
+                          style={{ color: "rgba(255, 255, 255, 0.25)" }}
+                        >
+                          <span className="opacity-0">{input}</span>
+                          <span>{ghostSuggestion}</span>
+                          <span className="ml-2 text-[10px] rounded border px-1 border-white/20">
+                            Tab ⇥
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <span className="caret font-mono" style={{ color: theme.primary }}>
+                      ▌
+                    </span>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* GUI Tab Views */}
+            {activeTab === "projects" && <GuiProjectsView theme={theme} />}
+            {activeTab === "about" && <GuiAboutView theme={theme} />}
+            {activeTab === "skills" && <GuiSkillsView theme={theme} />}
+            {activeTab === "contact" && <GuiContactView theme={theme} />}
+          </div>
+
+          {/* Bottom Dock / Quick-Command Bar */}
           <div
             className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[10px] sm:px-4 sm:text-[11px]"
             style={{
-              borderColor: "var(--hairline)",
-              color: "var(--phosphor-dim)",
+              borderColor: "var(--term-hairline)",
+              backgroundColor: "rgba(0, 0, 0, 0.4)",
             }}
           >
-            <div className="flex flex-wrap gap-1 sm:gap-2">
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto">
+              <span className="text-[10px] text-[var(--term-primary-dim)] mr-1 hidden sm:inline">
+                QUICK EXEC:
+              </span>
               {[
-                "help",
-                "projects",
-                "skills",
-                "neofetch",
-                "wallpaper",
-              ].map((c) => (
+                { cmd: "help", label: "help" },
+                { cmd: "projects", label: "projects" },
+                { cmd: "skills", label: "skills" },
+                { cmd: "about", label: "about" },
+                { cmd: "contact", label: "contact" },
+                { cmd: "neofetch", label: "neofetch" },
+                { cmd: "theme", label: "theme" },
+                { cmd: "cursor", label: "cursor" },
+                { cmd: "matrix", label: "matrix" },
+                { cmd: "wallpaper", label: "wallpaper" },
+                { cmd: "resume", label: "resume" },
+              ].map(({ cmd, label }) => (
                 <button
-                  key={c}
+                  key={cmd}
                   type="button"
                   disabled={booting}
-                  onClick={() =>
-                    runCommand(c)
-                  }
-                  className="status-btn rounded px-1.5 py-0.5 disabled:opacity-40"
+                  onClick={() => {
+                    setActiveTab("terminal");
+                    runCommand(cmd);
+                  }}
+                  className="rounded px-2 py-0.5 border transition disabled:opacity-30 hover:scale-105 active:scale-95"
+                  style={{
+                    borderColor: "var(--term-hairline)",
+                    background: "rgba(0, 0, 0, 0.3)",
+                    color: theme.primaryBright,
+                  }}
                 >
-                  {c}
+                  {label}
                 </button>
               ))}
             </div>
 
-            <span>
-              portshell · v2.0
-            </span>
+            {/* Terminal version tag & clear shortcut */}
+            <div className="flex items-center gap-3 text-[var(--term-primary-dim)] shrink-0">
+              <button
+                type="button"
+                onClick={() => runCommand("clear")}
+                className="hover:underline hover:text-[var(--term-primary-bright)]"
+                title="Clear screen (Ctrl+L)"
+              >
+                clear buffer
+              </button>
+              <span>portshell · v3.2</span>
+            </div>
           </div>
         </div>
 
-        <div
-          className="mt-5 flex flex-wrap justify-center gap-5 text-sm"
-          style={{
-            color:
-              "var(--phosphor-mid)",
-          }}
+        {/* External Social Links Footer */}
+        <footer
+          className="mt-4 flex flex-wrap justify-center items-center gap-6 text-xs"
+          style={{ color: "var(--term-primary-dim)" }}
         >
           <a
             href={profile.github}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 transition hover:text-[var(--phosphor-bright)]"
+            className="flex items-center gap-1.5 transition hover:text-[var(--term-primary-bright)]"
           >
-            <Github size={15} />
+            <Github size={14} />
             GitHub
           </a>
 
@@ -919,9 +1158,9 @@ export default function TerminalPortfolio() {
             href={profile.linkedin}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 transition hover:text-[var(--phosphor-bright)]"
+            className="flex items-center gap-1.5 transition hover:text-[var(--term-primary-bright)]"
           >
-            <User size={15} />
+            <Linkedin size={14} />
             LinkedIn
           </a>
 
@@ -929,84 +1168,74 @@ export default function TerminalPortfolio() {
             href={profile.portfolio}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 transition hover:text-[var(--phosphor-bright)]"
+            className="flex items-center gap-1.5 transition hover:text-[var(--term-primary-bright)]"
           >
-            <ExternalLink size={15} />
-            Site
+            <ExternalLink size={14} />
+            Website
           </a>
-        </div>
+
+          <a
+            href={`mailto:${profile.email}`}
+            className="flex items-center gap-1.5 transition hover:text-[var(--term-primary-bright)]"
+          >
+            <Mail size={14} />
+            {profile.email}
+          </a>
+        </footer>
       </div>
     </div>
   );
 }
 
-function HistoryLine({ item }) {
+// History Line Renderer
+function HistoryLine({ item, theme, onRunCommand, onSwitchTab, onSwitchTheme }) {
   switch (item.t) {
     case "boot":
-      return (
-        <p
-          style={{
-            color: "var(--phosphor-dim)",
-          }}
-        >
-          {item.c}
-        </p>
-      );
+      return <p style={{ color: "var(--term-primary-dim)" }}>{item.c}</p>;
 
     case "gap":
       return <p>&nbsp;</p>;
 
     case "system":
-      return (
-        <p
-          style={{
-            color: "var(--phosphor-mid)",
-          }}
-        >
-          {item.c}
-        </p>
-      );
+      return <p style={{ color: theme.primaryBright }}>{item.c}</p>;
 
     case "dim":
-      return (
-        <p
-          style={{
-            color: "var(--phosphor-dim)",
-          }}
-        >
-          {item.c}
-        </p>
-      );
+      return <p style={{ color: "var(--term-primary-dim)" }}>{item.c}</p>;
 
     case "rule":
-      return <div className="rule" />;
+      return (
+        <div
+          className="my-1.5 border-t"
+          style={{ borderColor: "var(--term-hairline)" }}
+        />
+      );
 
     case "kv":
       return (
-        <div className="kv-row">
-          <span className="kv-key">
-            {item.k}
+        <div className="flex gap-2">
+          <span
+            className="min-w-[100px] shrink-0"
+            style={{ color: "var(--term-primary-dim)" }}
+          >
+            · {item.k}
           </span>
-
-          <span>{item.v}</span>
+          <span style={{ color: "var(--term-primary-bright)" }}>{item.v}</span>
         </div>
       );
 
     case "cmdline":
       return (
-        <div className="kv-row">
-          <span className="cmd-key">
-            {item.k}
-          </span>
-
-          <span
-            style={{
-              color:
-                "var(--phosphor-mid)",
-            }}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onRunCommand(item.k)}
+            className="font-bold min-w-[90px] text-left hover:underline"
+            style={{ color: theme.accent }}
+            title={`Click to execute: ${item.k}`}
           >
-            {item.v}
-          </span>
+            {item.k}
+          </button>
+          <span style={{ color: "var(--term-primary-dim)" }}>{item.v}</span>
         </div>
       );
 
@@ -1014,98 +1243,123 @@ function HistoryLine({ item }) {
       return (
         <div
           className="flex items-center gap-2"
-          style={{
-            color:
-              "var(--phosphor-bright)",
-          }}
+          style={{ color: theme.primaryBright }}
         >
-          <span className="prompt-user shrink-0">
-            hafil@portfolio
-          </span>
-
-          <span className="prompt-colon">
-            :
-          </span>
-
-          <span className="prompt-tilde">
-            ~
-          </span>
-
-          <span className="prompt-dollar">
-            $
-          </span>
-
-          <span>{item.c}</span>
+          <span style={{ color: theme.promptUser }}>hafil@portfolio</span>
+          <span style={{ color: "var(--term-primary-dim)" }}>:</span>
+          <span style={{ color: theme.promptPath }}>~</span>
+          <span style={{ color: "var(--term-primary-dim)" }}>$</span>
+          <span className="font-bold">{item.c}</span>
         </div>
       );
 
     case "output":
-      return (
-        <p className="whitespace-pre-wrap">
-          {item.c}
-        </p>
-      );
+      return <p className="whitespace-pre-wrap">{item.c}</p>;
 
     case "error":
+      return <p style={{ color: theme.danger }}>{item.c}</p>;
+
+    case "tab_hint":
       return (
-        <p
-          style={{
-            color: "var(--red)",
-          }}
-        >
-          {item.c}
-        </p>
+        <div className="flex items-center gap-2 my-1">
+          <span className="text-[11px]" style={{ color: theme.secondary }}>
+            {item.c}
+          </span>
+          {item.tab && (
+            <button
+              type="button"
+              onClick={() => onSwitchTab(item.tab)}
+              className="text-[10px] px-2 py-0.5 rounded border underline"
+              style={{
+                borderColor: theme.secondary,
+                color: theme.secondary,
+              }}
+            >
+              Open [{item.tab}] Tab →
+            </button>
+          )}
+        </div>
+      );
+
+    case "theme_selector":
+      return (
+        <div className="flex flex-wrap gap-1.5 my-2">
+          {Object.values(THEMES).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onSwitchTheme(t.id)}
+              className="text-xs px-2 py-1 rounded border flex items-center gap-1.5"
+              style={{
+                borderColor: t.primary,
+                background: `${t.primary}18`,
+                color: t.primaryBright,
+              }}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: t.primary }}
+              />
+              {t.name}
+            </button>
+          ))}
+        </div>
       );
 
     case "project":
-      return (
-        <ProjectLine
-          project={item.project}
-          index={item.index}
-        />
-      );
+      return <TerminalProjectCard project={item.project} index={item.index} theme={theme} />;
 
     case "neofetch":
-      return <NeofetchCard />;
+      return <NeofetchCard uptime={item.uptime} theme={theme} />;
 
     default:
       return null;
   }
 }
 
-function ProjectLine({ project, index }) {
+HistoryLine.propTypes = {
+  item: PropTypes.object.isRequired,
+  theme: PropTypes.object.isRequired,
+  onRunCommand: PropTypes.func.isRequired,
+  onSwitchTab: PropTypes.func.isRequired,
+  onSwitchTheme: PropTypes.func.isRequired,
+};
+
+// Inline Terminal Project Card
+function TerminalProjectCard({ project, index, theme }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(`git clone ${project.url}.git`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="project-card my-2.5 p-3">
+    <div
+      className="my-2 rounded-lg border p-3 transition"
+      style={{
+        borderColor: "var(--term-hairline)",
+        background: "rgba(0, 0, 0, 0.25)",
+      }}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            style={{
-              color:
-                "var(--phosphor-dim)",
-            }}
-          >
-            [{index}]
-          </span>
-
+          <span style={{ color: "var(--term-primary-dim)" }}>[{index}]</span>
           <a
             href={project.url}
             target="_blank"
             rel="noreferrer"
-            className="font-semibold transition hover:underline"
-            style={{
-              color:
-                "var(--phosphor-bright)",
-            }}
+            className="font-bold hover:underline"
+            style={{ color: theme.primaryBright }}
           >
             {project.name}
           </a>
-
           <span
-            className="rounded-md px-1.5 py-0.5 text-[10px]"
+            className="rounded px-1.5 py-0.5 text-[10px]"
             style={{
-              background:
-                "rgba(126,242,168,0.1)",
-              color: "var(--phosphor)",
+              background: `${theme.primary}18`,
+              color: theme.primary,
             }}
           >
             {project.language}
@@ -1114,35 +1368,32 @@ function ProjectLine({ project, index }) {
 
         <div
           className="flex items-center gap-3 text-xs"
-          style={{
-            color:
-              "var(--phosphor-dim)",
-          }}
+          style={{ color: "var(--term-primary-dim)" }}
         >
           <span className="flex items-center gap-1">
-            <Star
-              size={12}
-              style={{
-                color: "var(--amber)",
-              }}
-            />
+            <Star size={12} style={{ color: theme.accent }} />
             {project.stars}
           </span>
-
           <span className="flex items-center gap-1">
             <GitFork size={12} />
             {project.forks}
           </span>
-
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="hover:underline flex items-center gap-1 text-[11px]"
+            title="Copy git clone command"
+          >
+            {copied ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
+            clone
+          </button>
           {project.demo && (
             <a
               href={project.demo}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1 hover:underline"
-              style={{
-                color: "var(--phosphor)",
-              }}
+              style={{ color: theme.secondary }}
             >
               <ExternalLink size={12} />
               demo
@@ -1151,22 +1402,17 @@ function ProjectLine({ project, index }) {
         </div>
       </div>
 
-      <p
-        className="mt-1.5 text-[13px]"
-        style={{
-          color:
-            "var(--phosphor-mid)",
-        }}
-      >
+      <p className="mt-1.5 text-xs" style={{ color: "var(--term-primary-dim)" }}>
         {project.description}
       </p>
 
       {project.topics?.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-1">
           {project.topics.map((t) => (
             <span
               key={t}
-              className="chip rounded px-1.5 py-0.5 text-[10px]"
+              className="rounded px-1.5 py-0.5 text-[9px] border border-[var(--term-hairline)]"
+              style={{ color: "var(--term-primary-dim)" }}
             >
               #{t}
             </span>
@@ -1177,147 +1423,86 @@ function ProjectLine({ project, index }) {
   );
 }
 
-function NeofetchCard() {
+TerminalProjectCard.propTypes = {
+  project: PropTypes.object.isRequired,
+  index: PropTypes.number.isRequired,
+  theme: PropTypes.object.isRequired,
+};
+
+// Neofetch Card with ASCII Logo and System Breakdown
+function NeofetchCard({ uptime, theme }) {
   const swatches = [
-    "#173404",
-    "#27500a",
-    "#3b6d11",
-    "#639922",
-    "#97c459",
-    "#c0dd97",
+    theme.primary,
+    theme.primaryDim,
+    theme.accent,
+    theme.secondary,
+    theme.danger,
+    theme.primaryBright,
   ];
 
   return (
     <div
-      className="my-2 flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:gap-5"
+      className="my-2.5 flex flex-col gap-4 rounded-xl border p-3.5 sm:flex-row sm:gap-6"
       style={{
-        borderColor: "var(--hairline)",
-        background:
-          "rgba(0,0,0,0.25)",
+        borderColor: "var(--term-hairline)",
+        background: "rgba(0,0,0,0.3)",
       }}
     >
-      <img
-        src={profile.avatar}
-        alt=""
-        className="h-20 w-20 rounded-lg border object-cover sm:h-24 sm:w-24"
-        style={{
-          borderColor:
-            "var(--hairline-strong)",
-        }}
-      />
+      <div className="shrink-0 flex flex-col items-center">
+        <img
+          src={profile.avatar}
+          alt={profile.name}
+          className="h-20 w-20 rounded-lg border object-cover sm:h-24 sm:w-24"
+          style={{ borderColor: "var(--term-hairline-strong)" }}
+        />
+        <span className="text-[10px] mt-1.5 font-mono text-[var(--term-primary-dim)]">
+          arch-hafilOS
+        </span>
+      </div>
 
-      <div className="space-y-0.5 text-[12px] sm:text-[13px]">
-        <p
-          className="font-bold"
-          style={{
-            color:
-              "var(--phosphor-bright)",
-          }}
-        >
+      <div className="space-y-0.5 text-xs leading-tight flex-1 font-mono">
+        <p className="font-bold" style={{ color: theme.primaryBright }}>
           {profile.username}
-
-          <span
-            style={{
-              color:
-                "var(--phosphor-dim)",
-            }}
-          >
-            @portfolio
-          </span>
+          <span style={{ color: "var(--term-primary-dim)" }}>@hafil-machine</span>
         </p>
 
-        <p
-          style={{
-            color:
-              "var(--phosphor-dim)",
-          }}
-        >
-          ----------------------
+        <p style={{ color: "var(--term-primary-dim)" }}>
+          ---------------------------------------
         </p>
 
         <p>
-          <span
-            style={{
-              color:
-                "var(--phosphor)",
-            }}
-          >
-            name
-          </span>{" "}
-          · {profile.name}
+          <span style={{ color: theme.primary }}>OS:</span> hafilOS x86_64 (Linux / React 19)
         </p>
-
         <p>
-          <span
-            style={{
-              color:
-                "var(--phosphor)",
-            }}
-          >
-            role
-          </span>{" "}
-          · {profile.role}
+          <span style={{ color: theme.primary }}>Host:</span> {profile.location} (Remote Gateway)
         </p>
-
         <p>
-          <span
-            style={{
-              color:
-                "var(--phosphor)",
-            }}
-          >
-            host
-          </span>{" "}
-          · {profile.location}
+          <span style={{ color: theme.primary }}>Kernel:</span> portshell 3.2.0-generic
         </p>
-
         <p>
-          <span
-            style={{
-              color:
-                "var(--phosphor)",
-            }}
-          >
-            shell
-          </span>{" "}
-          · zsh / react-terminal
+          <span style={{ color: theme.primary }}>Uptime:</span> {uptime || "0m 00s"}
         </p>
-
         <p>
-          <span
-            style={{
-              color:
-                "var(--phosphor)",
-            }}
-          >
-            theme
-          </span>{" "}
-          · crt-phosphor
+          <span style={{ color: theme.primary }}>Shell:</span> zsh 5.9 (x86_64-portshell)
         </p>
-
         <p>
-          <span
-            style={{
-              color:
-                "var(--phosphor)",
-            }}
-          >
-            status
-          </span>{" "}
-          ·{" "}
-          {profile.available
-            ? "available for work"
-            : "busy"}
+          <span style={{ color: theme.primary }}>Resolution:</span> 1920x1080 CRT Display
+        </p>
+        <p>
+          <span style={{ color: theme.primary }}>Theme:</span> {theme.name} [{theme.badge}]
+        </p>
+        <p>
+          <span style={{ color: theme.primary }}>Status:</span>{" "}
+          {profile.available ? "Available for Opportunities" : "Occupied"}
         </p>
 
-        <div className="mt-1.5 flex gap-1">
-          {swatches.map((c) => (
+        {/* Color Palette Swatches */}
+        <div className="mt-2.5 flex gap-1.5">
+          {swatches.map((c, i) => (
             <span
-              key={c}
-              className="h-3 w-3 rounded-sm"
-              style={{
-                background: c,
-              }}
+              key={i}
+              className="h-3 w-5 rounded-xs"
+              style={{ backgroundColor: c }}
             />
           ))}
         </div>
@@ -1325,3 +1510,94 @@ function NeofetchCard() {
     </div>
   );
 }
+
+NeofetchCard.propTypes = {
+  uptime: PropTypes.string,
+  theme: PropTypes.object.isRequired,
+};
+
+TerminalPortfolio.propTypes = {
+  cursorMode: PropTypes.string,
+  onCursorModeChange: PropTypes.func,
+};
+
+const HeaderTelemetry = React.memo(function HeaderTelemetry({ available }) {
+  const [time, setTime] = useState("");
+  const [uptime, setUptime] = useState("00m 00s");
+  const startRef = useRef(Date.now());
+
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      setTime(d.toLocaleTimeString("en-US", { hour12: false }));
+      const diff = Math.floor((Date.now() - startRef.current) / 1000);
+      const hrs = Math.floor(diff / 3600);
+      const mins = Math.floor((diff % 3600) / 60);
+      const secs = diff % 60;
+      setUptime(
+        `${hrs > 0 ? `${hrs}h ` : ""}${mins.toString().padStart(2, "0")}m ${secs
+          .toString()
+          .padStart(2, "0")}s`
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div
+      className="flex items-center gap-3 text-[11px]"
+      style={{ color: "var(--term-primary-dim)" }}
+    >
+      <span className="flex items-center gap-1 font-mono">
+        <Clock size={12} />
+        {time || "00:00:00"}
+      </span>
+      <span className="hidden sm:inline font-mono">up: {uptime}</span>
+      <div className="flex items-center gap-1.5">
+        <span
+          className="h-2 w-2 rounded-full animate-pulse"
+          style={{ backgroundColor: available ? "#4ade80" : "#9ca3af" }}
+        />
+        <span className="hidden sm:inline">{available ? "online" : "away"}</span>
+      </div>
+    </div>
+  );
+});
+
+HeaderTelemetry.propTypes = {
+  available: PropTypes.bool,
+};
+
+const HistoryStream = React.memo(function HistoryStream({
+  history,
+  theme,
+  onRunCommand,
+  onSwitchTab,
+  onSwitchTheme,
+}) {
+  return (
+    <div className="space-y-1.5 text-[12px] sm:text-[13px] leading-relaxed flex-1">
+      {history.map((item) => (
+        <div key={item.key} className="fade-in-line">
+          <HistoryLine
+            item={item}
+            theme={theme}
+            onRunCommand={onRunCommand}
+            onSwitchTab={onSwitchTab}
+            onSwitchTheme={onSwitchTheme}
+          />
+        </div>
+      ))}
+    </div>
+  );
+});
+
+HistoryStream.propTypes = {
+  history: PropTypes.array.isRequired,
+  theme: PropTypes.object.isRequired,
+  onRunCommand: PropTypes.func.isRequired,
+  onSwitchTab: PropTypes.func.isRequired,
+  onSwitchTheme: PropTypes.func.isRequired,
+};
